@@ -1,0 +1,9 @@
+/*
+!.gitignore
+!cell.pl
+!meal.pl
+!food.pl
+!food.json
+!food_jsonToPl.scala
+!build.sbt
+!README.md
