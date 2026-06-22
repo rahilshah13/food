@@ -21,3 +21,4 @@
 ### `cheese.pl`
 - `tpl cheese.pl -g "list_non_rennet, halt."`
 - `tpl cheese.pl -g "plan_batch(cheddar, 10), halt."`
+- `tpl cheese.pl -g "forall(recipe(Name, Milk, _, _, _, _, 0),format('Zero Age Time: ~w (Base: ~w)~n', [Name, Milk])),halt."`
