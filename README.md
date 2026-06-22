@@ -16,3 +16,8 @@
 - Find meals consisting of 9 portions, under 600g, with 150 of Protein and 15mg Zinc, satisfying FDA Vitamin Daily Values. 
 - `tpl food.pl meal.pl -g "solve_meal([need('Protein', 150.0), need('Zinc, Zn', 0.015)], 600, 9, yes, Meal), writeln(Meal), halt."`
 - `tpl food.pl meal.pl -g "forall(solve_meal_all([need('Protein', 150.0), need('Zinc, Zn', 0.015)], 600, 9, yes, Meal), writeln(Meal)), halt."`
+
+---
+### `cheese.pl`
+- `tpl cheese.pl -g "list_non_rennet, halt."`
+- `tpl cheese.pl -g "plan_batch(cheddar, 10), halt."`

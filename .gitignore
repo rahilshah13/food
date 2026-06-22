@@ -1,5 +1,6 @@
 /*
 !.gitignore
+!cheese.pl
 !cell.pl
 !meal.pl
 !food.pl
