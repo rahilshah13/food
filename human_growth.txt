@@ -1,0 +1,459 @@
+==================================================
+GROWTH & NUTRITION PLAN: m HUMAN
+==================================================
+Target Growth Mass: 80 kg
+Duration: 7305 days
+
+
+--- Daily Dietary Portfolio (Aggregated) ---
+=============================================
+Food Item                Mass (g)
+---------------------------------------------
+Hummus, commercial       500
+Tomatoes, grape, raw     500
+Beans, snap, green, ca...500
+Frankfurter, beef, unh...500
+Nuts, almonds, dry roa...500
+Kale, raw                500
+Egg, whole, raw, froze...500
+Egg, white, raw, froze...500
+Egg, white, dried        500
+Onion rings, breaded, ...500
+Pickles, cucumber, dil...500
+Cheese, parmesan, grat...500
+Cheese, pasteurized pr...500
+Grapefruit juice, whit...500
+Peaches, yellow, raw     500
+Seeds, sunflower seed ...500
+Kale, frozen, cooked, ...500
+Mustard, prepared, yel...500
+Kiwifruit, green, raw    500
+Nectarines, raw          500
+Cheese, cheddar          500
+Cheese, cottage, lowfa...500
+Cheese, mozzarella, lo...500
+Egg, whole, dried        500
+Egg, yolk, raw, frozen...500
+Egg, yolk, dried         500
+Yogurt, Greek, plain, ...500
+Yogurt, Greek, strawbe...500
+Oil, coconut             500
+Chicken, broilers or f...500
+Chicken, broiler or fr...500
+Sauce, pasta, spaghett...500
+Ham, sliced, pre-packa...500
+Olives, green, Manzani...500
+Cookies, oatmeal, soft...500
+Tomatoes, canned, red,...500
+Fish, haddock, raw       500
+Fish, pollock, raw       500
+Fish, tuna, light, can...500
+Restaurant, Chinese, f...500
+Restaurant, Latino, ta...500
+Restaurant, Latino, pu...500
+Beef, loin, tenderloin...500
+Beef, loin, top loin s...500
+Beef, round, eye of ro...500
+Beef, round, top round...500
+Beef, short loin, port...500
+Beef, short loin, t-bo...500
+Carrots, frozen, unpre...500
+Cheese, dry white, que...500
+Cheese, ricotta, whole...500
+Cheese, swiss            500
+Figs, dried, uncooked    500
+Lettuce, cos or romain...500
+Melons, cantaloupe, ra...500
+Oranges, raw, navels     500
+Milk, lowfat, fluid, 1...500
+Pears, raw, bartlett     500
+Restaurant, Chinese, s...500
+Salt, table, iodized     500
+Milk, nonfat, fluid, w...500
+Sauce, salsa, ready-to...500
+Milk, reduced fat, flu...500
+Sausage, breakfast sau...500
+Sausage, Italian, pork...500
+Sausage, pork, chorizo...500
+Milk, whole, 3.25% mil...500
+Sausage, turkey, break...500
+Sugars, granulated       500
+Turkey, ground, 93% le...500
+Ham, sliced, restauran...500
+Cheese, American, rest...500
+Beans, Dry, Medium Red...500
+Beans, Dry, Red (0% mo...500
+Beans, Dry, Flor de Ma...500
+Beans, Dry, Brown (0% ...500
+Beans, Dry, Tan (0% mo...500
+Beans, Dry, Light Tan ...500
+Beans, Dry, Carioca (0...500
+Beans, Dry, Cranberry ...500
+Beans, Dry, Light Red ...500
+Beans, Dry, Pink (0% m...500
+Beans, Dry, Dark Red K...500
+Beans, Dry, Navy (0% m...500
+Beans, Dry, Small Whit...500
+Beans, Dry, Small Red ...500
+Beans, Dry, Black (0% ...500
+Beans, Dry, Pinto (0% ...500
+Beans, Dry, Great Nort...500
+Broccoli, raw            500
+Ketchup, restaurant      500
+Eggs, Grade A, Large, ...500
+Eggs, Grade A, Large, ...500
+Oil, canola              500
+Oil, corn                500
+Oil, soybean             500
+Oil, olive, extra virg...500
+Eggs, Grade A, Large, ...500
+Pork, cured, bacon, co...500
+Butter, stick, unsalte...500
+Flour, wheat, all-purp...500
+Flour, wheat, all-purp...500
+Flour, wheat, all-purp...500
+Flour, whole wheat, un...500
+Flour, bread, white, e...500
+Flour, rice, white, un...500
+Flour, corn, yellow, f...500
+Butter, stick, salted    500
+Onions, red, raw         500
+Onions, yellow, raw      500
+Garlic, raw              500
+Flour, soy, defatted     500
+Flour, soy, full-fat     500
+Flour, rice, brown       500
+Flour, rice, glutinous   500
+Flour, pastry, unenric...500
+Onions, white, raw       500
+Bananas, overripe, raw   500
+Bananas, ripe and slig...500
+Apples, red delicious,...500
+Apples, fuji, with ski...500
+Apples, gala, with ski...500
+Apples, granny smith, ...500
+Apples, honeycrisp, wi...500
+Oil, peanut              500
+Oil, sunflower           500
+Oil, safflower           500
+Oil, olive, extra ligh...500
+Mushroom, lion's mane    500
+Mushroom, oyster         500
+Mushrooms, shiitake      500
+Mushrooms, white butto...500
+Soy milk, unsweetened,...500
+Almond milk, unsweeten...500
+Spinach, baby            500
+Spinach, mature          500
+Tomato, roma             500
+Flour, 00                500
+Flour, spelt, whole gr...500
+Flour, semolina, coars...500
+Flour, semolina, fine    500
+Apple juice, with adde...500
+Orange juice, no pulp,...500
+Grape juice, purple, w...500
+Grape juice, white, wi...500
+Cranberry juice, not f...500
+Grapefruit juice, red,...500
+Tomato juice, with add...500
+Orange juice, no pulp,...500
+Mushroom, portabella     500
+Mushroom, king oyster    500
+Mushroom, enoki          500
+Mushroom, crimini        500
+Mushroom, maitake        500
+Mushroom, beech          500
+Mushroom, pioppini       500
+Soy milk, sweetened, p...500
+Almond milk, unsweeten...500
+Oat milk, unsweetened,...500
+Carrots, mature, raw     500
+Carrots, baby, raw       500
+Peppers, bell, green, ...500
+Peppers, bell, yellow,...500
+Peppers, bell, red, ra...500
+Peppers, bell, orange,...500
+Buttermilk, low fat      500
+Yogurt, plain, whole m...500
+Yogurt, Greek, plain, ...500
+Cheese, parmesan, grat...500
+Cheese, feta, whole mi...500
+Flour, almond            500
+Flour, oat, whole grai...500
+Flour, potato            500
+Peanut butter, creamy    500
+Sesame butter, creamy    500
+Almond butter, creamy    500
+Flaxseed, ground         500
+Cottage cheese, full f...500
+Cream cheese, full fat...500
+Cream, heavy             500
+Cream, sour, full fat    500
+Lettuce, iceberg, raw    500
+Lettuce, romaine, gree...500
+Lettuce, leaf, red, ra...500
+Lettuce, leaf, green, ...500
+Nuts, pine nuts, raw     500
+Nuts, almonds, whole, ...500
+Nuts, walnuts, English...500
+Nuts, pecans, halves, ...500
+Oats, whole grain, rol...500
+Oats, whole grain, ste...500
+Pineapple, raw           500
+Cherries, sweet, dark ...500
+Beans, snap, green, ra...500
+Potatoes, russet, with...500
+Potatoes, red, without...500
+Potatoes, gold, withou...500
+Sweet potatoes, orange...500
+Celery, raw              500
+Cucumber, with peel, r...500
+Cabbage, green, raw      500
+Cabbage, red, raw        500
+Strawberries, raw        500
+Raspberries, raw         500
+Blueberries, raw         500
+Grapes, red, seedless,...500
+Grapes, green, seedles...500
+Applesauce, unsweetene...500
+Flour, amaranth          500
+Flour, quinoa            500
+Flour, sorghum           500
+Flour, buckwheat         500
+Flour, rye               500
+Flour, barley            500
+Flour, cassava           500
+Buckwheat, whole grain   500
+Millet, whole grain      500
+Rice, brown, long grai...500
+Rice, white, long grai...500
+Beef, ground, 90% lean...500
+Beef, ground, 80% lean...500
+Pork, ground, raw        500
+Chicken, ground, with ...500
+Turkey, ground, 93% le...500
+Nuts, brazilnuts, raw    500
+Nuts, cashew nuts, raw   500
+Nuts, hazelnuts or fil...500
+Peanuts, raw             500
+Flour, chestnut          500
+Nuts, macadamia nuts, ...500
+Nuts, pistachio nuts, ...500
+Seeds, pumpkin seeds (...500
+Seeds, sunflower seed,...500
+Flour, coconut           500
+Beans, cannellini, dry   500
+Chickpeas, (garbanzo b...500
+Lentils, dry             500
+Blackeye pea, dry        500
+Beans, black, canned, ...500
+Beans, navy, canned, s...500
+Beans, cannellini, can...500
+Chickpeas (garbanzo be...500
+Beans, kidney, dark re...500
+Beans, kidney, light r...500
+Peas, green, sweet, ca...500
+Beans, pinto, canned, ...500
+Blackeye pea, canned, ...500
+Beans, great northern,...500
+Pork, loin, boneless, ...500
+Pork, loin, tenderloin...500
+Chicken, breast, bonel...500
+Chicken, thigh, bonele...500
+Beef, ribeye, steak, b...500
+Beef, round, top round...500
+Beef, chuck, roast, bo...500
+Beef, flank, steak, bo...500
+Yogurt, plain, nonfat    500
+Cheese, monterey jack,...500
+Cheese, pasteurized pr...500
+Cheese, provolone, sli...500
+Cheese, oaxaca, solid    500
+Cheese, queso fresco, ...500
+Cheese, cotija, solid    500
+Fish, salmon, sockeye,...500
+Fish, salmon, Atlantic...500
+Fish, tilapia, farm ra...500
+Crustaceans, shrimp, f...500
+Fish, cod, Atlantic, w...500
+Fish, catfish, farm ra...500
+Crustaceans, crab, blu...500
+Squash, summer, green,...500
+Squash, summer, yellow...500
+Squash, winter, butter...500
+Squash, winter, acorn,...500
+Cabbage, bok choy, raw   500
+Cauliflower, raw         500
+Collards, raw            500
+Brussels sprouts, raw    500
+Beets, raw               500
+Eggplant, raw            500
+Tomatoes, whole, canne...500
+Tomato, sauce, canned,...500
+Tomato, paste, canned,...500
+Tomatoes, crushed, can...500
+Tomato, puree, canned    500
+Apricot, with skin, ra...500
+Melons, honeydew, raw    500
+Plantains, ripe, raw     500
+Plantains, underripe, ...500
+Chia seeds, dry, raw     500
+Bulgur, dry, raw         500
+Wild rice, dry, raw      500
+Arugula, baby, raw       500
+Asparagus, green, raw    500
+Avocado, Hass, peeled,...500
+Rice, black, unenriche...500
+Corn, sweet, yellow an...500
+Einkorn, grain, dry, r...500
+Farro, pearled, dry, r...500
+Fonio, grain, dry, raw   500
+Khorasan, grain, dry, ...500
+Kiwifruit (kiwi), gree...500
+Mandarin, seedless, pe...500
+Mango, Tommy Atkins, p...500
+Mango, Ataulfo, peeled...500
+Corn flour, masa harin...500
+Pear, Anjou, green, wi...500
+Plum, black, with skin...500
+Rice, red, unenriched,...500
+Sorghum bran, white, u...500
+Sorghum flour, white, ...500
+Sorghum grain, white, ...500
+Sorghum, whole grain, ...500
+Plantains, overripe, r...500
+Chicken, drumstick, me...500
+Chicken, thigh, meat a...500
+Chicken, wing, meat an...500
+Chicken, breast, meat ...500
+Lamb, ground, raw        500
+Bison, ground, raw       500
+Beef, short loin (NY s...500
+Beef, tenderloin steak...500
+Beef, top sirloin stea...500
+Pork, chop, center cut...500
+Pork, belly, with skin...500
+Pawpaw, peeled, seeded...500
+Squash, pie pumpkin, p...500
+Squash, spaghetti, pee...500
+Rutabaga, peeled, raw    500
+Blackberries, raw        500
+Tomatillos, dehusked, ...500
+Cabbage, napa, leaf, d...500
+Leeks, bulb and greens...500
+Green onion, (scallion...500
+Shallots, bulb, peeled...500
+Juice, prune, shelf-st...500
+Juice, pomegranate, fr...500
+Juice, tart cherry, fr...500
+Anchovies, canned in o...500
+Beet greens, raw         500
+Cod, Pacific or Alaska...500
+Fennel, bulb, raw        500
+Halibut, frozen, wild ...500
+Lobster, tail only, fr...500
+Mahi mahi, frozen, wil...500
+Parsnips, raw            500
+Peppers, banana or Hun...500
+Peppers, jalapeno, see...500
+Peppers, poblano, seed...500
+Peppers, serrano, seed...500
+Radicchio, raw           500
+Radishes, red, raw       500
+Scallops, bay, Patagon...500
+Scallops, sea, frozen,...500
+Sea bass, Chilean, fro...500
+Snapper, frozen, wild ...500
+Snow crab, legs only, ...500
+Squid (calamari), froz...500
+Swordfish, frozen, wil...500
+Tuna, ahi or yellowfin...500
+Turnips, raw             500
+Watermelon, seedless, ...500
+Watermelon, seedless, ...500
+=============================================
+
+--- Organ Tissue Synthesis & Nutrient Allocation ---
+=======================================================
+Organ                    Mass (kg)      Protein (g)
+-------------------------------------------------------
+skin                     12.80          112204.80
+brain                    1.60           14025.60
+spinal_cord              0.08           701.28
+heart                    0.40           3506.40
+blood                    6.40           56102.40
+stomach                  0.40           3506.40
+liver                    2.00           17532.00
+small_intestine          1.20           10519.20
+large_intestine          0.80           7012.80
+lung                     1.20           10519.20
+kidney                   0.40           3506.40
+bone                     12.00          105192.00
+skeletal_muscle          32.00          280512.00
+cartilage                0.40           3506.40
+peripheral_nerve         0.40           3506.40
+eye_retina               0.08           701.28
+cornea                   0.08           701.28
+olfactory_epithelium     0.08           701.28
+inner_ear                0.08           701.28
+tooth                    0.40           3506.40
+hair_follicle            0.08           701.28
+sebaceous_gland          0.08           701.28
+sweat_gland              0.08           701.28
+pineal_gland             0.08           701.28
+pituitary_gland          0.08           701.28
+esophagus                0.24           2103.84
+gallbladder              0.08           701.28
+pancreas                 0.16           1402.56
+salivary_gland           0.08           701.28
+tongue                   0.08           701.28
+pharynx                  0.08           701.28
+trachea                  0.08           701.28
+bronchus                 0.08           701.28
+larynx                   0.08           701.28
+diaphragm                0.16           1402.56
+spleen                   0.24           2103.84
+thymus                   0.08           701.28
+lymph_node               0.16           1402.56
+bone_marrow              2.40           21038.40
+tonsil                   0.08           701.28
+artery                   0.16           1402.56
+vein                     0.16           1402.56
+capillary                0.08           701.28
+lymphatic_vessel         0.08           701.28
+appendix                 0.08           701.28
+thyroid_gland            0.08           701.28
+parathyroid_gland        0.01           70.13
+adrenal_gland            0.08           701.28
+ureter                   0.08           701.28
+urinary_bladder          0.16           1402.56
+urethra                  0.08           701.28
+ovary                    0.08           701.28
+testis                   0.08           701.28
+uterus                   0.16           1402.56
+prostate                 0.08           701.28
+fallopian_tube           0.08           701.28
+epididymis               0.08           701.28
+vagina                   0.08           701.28
+vas_deferens             0.08           701.28
+clitoris                 0.08           701.28
+penis                    0.08           701.28
+mammary_gland            0.08           701.28
+seminal_vesicle          0.08           701.28
+bulbourethral            0.08           701.28
+placenta                 0.40           3506.40
+umbilical_cord           0.08           701.28
+amnion                   0.08           701.28
+yolk_sac                 0.08           701.28
+rectum                   0.08           701.28
+anus                     0.08           701.28
+ligament                 0.08           701.28
+tendon                   0.08           701.28
+mesentery                0.08           701.28
+synovium                 0.08           701.28
+sclera                   0.08           701.28
+iris                     0.08           701.28
+lens                     0.08           701.28
+meninges                 0.08           701.28
+=======================================================
