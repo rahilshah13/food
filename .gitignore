@@ -1,5 +1,7 @@
 /*
 !.gitignore
+!human_growth.txt
+!human.pl
 !cheese.pl
 !cell.pl
 !meal.pl
