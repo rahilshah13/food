@@ -39,3 +39,23 @@
 
 * **Acquire Mass from Nutrient Budget (Leucine Example):**
     `tpl -l grow.pl -g "cell(_, skeletal_myocyte, UnitMass, _, Nutrients), member(leucine-Prop, Nutrients), Mass #= 50 // (Prop * UnitMass), writeln(Mass), halt."`
+
+---
+### `human.pl`
+- Calculates the nutrient surplus required for a male (`m`) to reach 80kg over 20 years, identifies the FDA complaint dietary intake to support that growth, and writes the plan to `human_growth.txt`:
+`tpl human.pl -g "write_human_report(m, 80, 7305, 'human_growth.txt'), halt."` 
+
+- **predicates**
+* `write_human_report(+Gender, +TargetMass, +Days, +FileName)`: entry point
+* `solve_growth(+TargetMass, +Days, -DailyNeeds)`: Maps biomass requirements to nutrient targets
+* `calculate_expenditure(+Mass, +Days, -TDEE)`: Computes metabolic baseline and tissue synthesis costs
+* `match_nutrients(+DailyNeeds, +FoodDB, -OptimalMeal)`: Selects foods to meet requirements
+* `print_metabolic_breakdown(+Stream, +Mass, +TotalProtein)`: Calculates organ-specific protein needs.
+* `summarize_and_print(+Stream, +Meal)`: Aggregates data for the report
+* `print_summary(+Stream, +Summary)`
+* `truncate_str(+Input, +Len, -Output)`
+
+- **facts**
+* `organ(+Gender, +ID, +Name, +Composition, +MassPct)`: Anatomical definitions
+* `cell(+Gender, +Name, +Size, +Turnover, +NutrientRatio)`: Metabolic cost per cell type
+* `food_data(+ID, +Name, +NutrientList)`: Nutritional inventory
