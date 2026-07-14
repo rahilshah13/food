@@ -42,7 +42,7 @@
 
 ---
 ### `human.pl`
-`tpl food.pl human.pl -g "write_human_report(m, 80, 7305, 'human_growth.txt'), halt."`
+`tpl food.pl grow.pl human.pl -g "write_human_report(m, 80, 7305, 'human_growth.txt'), halt."`
 - Calculates the nutrient surplus required for a male (`m`) to reach 80kg over 20 years, identifies the FDA complaint dietary intake to support that growth, and writes the plan to `human_growth.txt`.
 - Gemini estimates the cost of the 20 year meal plan to be under $2000 USD
 
