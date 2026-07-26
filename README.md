@@ -78,3 +78,12 @@
 * **Standard Cell Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 50.0), (co, 30.0), (o, 20.0)], 50, C, D, S)"`
   * Evaluates cell manufacturing parameters, capacity, and stability for a lithium-cobalt composition using valid liquid electrolyte configurations.
 * **Solid-State Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 40.0), (si, 30.0), (o, 30.0)], 100, C, D, S)"`
+
+
+--- 
+
+### `smiles.pl` 
+
+* `iterate_smiles_from_mass([(c, 24.02), (h, 6.05), (o, 16.0)], Smiles)`: Iterates through matching topological SMILES strings in the library that align with an ethanol mass profile, yielding valid string representations.
+* `smiles_to_mass_list('CC(=O)OC1=CC=CC=C1C(=O)O', MassList)`: Parses an input SMILES string (such as aspirin) through the atom extractor and periodic table database to calculate and return its total elemental mass breakdown.
+* `match_mass_profile([(c, 72.0), (h, 12.0)], [(c, 72.066), (h, 6.048)])`: Normalizes, sorts, and checks a target element-mass list against a known molecule's profile within an absolute tolerance range of 2.5.
