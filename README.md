@@ -66,10 +66,9 @@
 
 * evaluates the estimated tensile ductility and malleability of alloy compositions using a multi-phase rule of mixtures and non-linear solute solubility penalties.
 
-* #### Null Example
+* Null Example: calculates properties for carbon, demonstrating the structural penalties applied to pure interstitial non-metals.
 * `tpl engine.pl "estimate_mechanical_properties([(c, 100.0)], D, M)"`
-* Calculates mechanical properties for pure carbon, demonstrating the heavy structural penalties applied to pure interstitial non-metals.
-* Novel Alloy Example
+* novel alloy example
 * `tpl engine.pl "estimate_mechanical_properties([(ti, 60.0), (al, 10.0), (v, 15.0), (mo, 10.0), (zr, 5.0)], D, M)"`
 
 --- 
