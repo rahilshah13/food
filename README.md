@@ -71,3 +71,10 @@
 * Calculates mechanical properties for pure carbon, demonstrating the heavy structural penalties applied to pure interstitial non-metals.
 * Novel Alloy Example
 * `tpl engine.pl "estimate_mechanical_properties([(ti, 60.0), (al, 10.0), (v, 15.0), (mo, 10.0), (zr, 5.0)], D, M)"`
+
+--- 
+### `battery.pl`
+* Uses stoichiometric analysis with `cheese.pl` inspired recipe-driven constraints to make batteries.
+* **Standard Cell Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 50.0), (co, 30.0), (o, 20.0)], 50, C, D, S)"`
+  * Evaluates cell manufacturing parameters, capacity, and stability for a lithium-cobalt composition using valid liquid electrolyte configurations.
+* **Solid-State Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 40.0), (si, 30.0), (o, 30.0)], 100, C, D, S)"`
