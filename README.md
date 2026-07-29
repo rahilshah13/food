@@ -86,3 +86,14 @@
 * `iterate_smiles_from_mass([(c, 24.02), (h, 6.05), (o, 16.0)], Smiles)`: Iterates through matching topological SMILES strings in the library that align with an ethanol mass profile, yielding valid string representations.
 * `smiles_to_mass_list('CC(=O)OC1=CC=CC=C1C(=O)O', MassList)`: Parses an input SMILES string (such as aspirin) through the atom extractor and periodic table database to calculate and return its total elemental mass breakdown.
 * `match_mass_profile([(c, 72.0), (h, 12.0)], [(c, 72.066), (h, 6.048)])`: Normalizes, sorts, and checks a target element-mass list against a known molecule's profile within an absolute tolerance range of 2.5.
+
+
+---
+
+### `laundry.pl`
+- Models laundry load efficacy, material blends, and multi-regime cascading tumbler mechanics.
+  
+```
+%   tpl -g "Load = [garment(shirt, 1.2, cotton)], optimize_wash_cycle(Load, 0.25, Soap, Water, Temp, Speed, Len, Clean)."
+%   tpl -g "Load = [garment(c1,0.5,cotton),garment(c2,0.3,wool),garment(c3,0.4,denim),garment(c4,0.2,silk),garment(c5,0.6,linen),garment(c6,0.5,nylon),garment(c7,0.4,fleece),garment(c8,0.7,cashmere),garment(c9,0.3,spandex),garment(c10,0.5,rayon),garment(c11,1.0,canvas),garment(c12,0.4,polyester),garment(c13,0.6,cotton),garment(c14,0.3,wool),garment(c15,0.5,denim),garment(c16,0.2,silk),garment(c17,0.4,linen),garment(c18,0.5,nylon),garment(c19,0.3,fleece),garment(c20,0.6,cashmere),garment(c21,0.4,spandex),garment(c22,0.5,rayon),garment(c23,0.8,canvas),garment(c24,0.3,polyester),garment(c25,0.5,cotton),garment(c26,0.4,wool),garment(c27,0.3,denim),garment(c28,0.5,linen),garment(c29,0.2,nylon),garment(c30,0.4,fleece)], optimize_wash_cycle(Load, 0.25, Soap, Water, Temp, Speed, Len, Clean)."
+```
