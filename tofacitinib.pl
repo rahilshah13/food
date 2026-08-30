@@ -1,4 +1,20 @@
-:- use_module(library(lists)).
+is_upper(C) :-
+    (   atom(C) -> atom_codes(C, [Code])
+    ;   integer(C) -> Code = C
+    ),
+    Code >= 65, Code <= 90.
+
+is_lower(C) :-
+    (   atom(C) -> atom_codes(C, [Code])
+    ;   integer(C) -> Code = C
+    ),
+    Code >= 97, Code <= 122.
+
+is_digit(C) :-
+    (   atom(C) -> atom_codes(C, [Code])
+    ;   integer(C) -> Code = C
+    ),
+    Code >= 48, Code <= 57.
 
 element(h,1.008).
 element(c,12.011).
@@ -228,26 +244,26 @@ atom_token(Cs,atom(0,E,K,0,0,none,none),Rest) :-
     atom_symbol(Cs,E,K,Rest).
 
 atom_symbol([A,B|R],E,aliphatic,R) :-
-    char_type(A,upper),
-    char_type(B,lower),
+    is_upper(A),
+    is_lower(B),
     atom_chars(X,[A,B]),
     downcase_atom(X,E),
     element(E,_),
     !.
 atom_symbol([A|R],E,aliphatic,R) :-
-    char_type(A,upper),
+    is_upper(A),
     downcase_atom(A,E),
     element(E,_),
     !.
 atom_symbol([A,B|R],E,aromatic,R) :-
-    char_type(A,lower),
-    char_type(B,lower),
+    is_lower(A),
+    is_lower(B),
     atom_chars(X,[A,B]),
     downcase_atom(X,E),
     aromatic(E),
     !.
 atom_symbol([A|R],E,aromatic,R) :-
-    char_type(A,lower),
+    is_lower(A),
     downcase_atom(A,E),
     aromatic(E),
     !.
@@ -270,39 +286,39 @@ bracket_atom(Cs,atom(Isotope,E,K,H,Charge,Chiral,Map)) :-
     R6=[].
 
 isotope([C|R],Rest,N) :-
-    char_type(C,digit),
+    is_digit(C),
     !,
     digits([C|R],Ds,Rest),
     number_chars(N,Ds).
 isotope(R,R,0).
 
 digits([C|R],[C|Ds],Rest) :-
-    char_type(C,digit),
+    is_digit(C),
     !,
     digits(R,Ds,Rest).
 digits(R,[],R).
 
 bracket_symbol([A,B|R],R,E,aliphatic) :-
-    char_type(A,upper),
-    char_type(B,lower),
+    is_upper(A),
+    is_lower(B),
     atom_chars(X,[A,B]),
     downcase_atom(X,E),
     element(E,_),
     !.
 bracket_symbol([A|R],R,E,aliphatic) :-
-    char_type(A,upper),
+    is_upper(A),
     downcase_atom(A,E),
     element(E,_),
     !.
 bracket_symbol([A,B|R],R,E,aromatic) :-
-    char_type(A,lower),
-    char_type(B,lower),
+    is_lower(A),
+    is_lower(B),
     atom_chars(X,[A,B]),
     downcase_atom(X,E),
     aromatic(E),
     !.
 bracket_symbol([A|R],R,E,aromatic) :-
-    char_type(A,lower),
+    is_lower(A),
     downcase_atom(A,E),
     aromatic(E),
     !.
@@ -313,18 +329,18 @@ chirality(['@'|R],R,at) :- !.
 chirality(R,R,none).
 
 hydrogens(['H',D|R],R,N) :-
-    char_type(D,digit),
+    is_digit(D),
     !,
     atom_number(D,N).
 hydrogens(['H'|R],R,1) :- !.
 hydrogens(R,R,0).
 
 charge(['+',D|R],R,N) :-
-    char_type(D,digit),
+    is_digit(D),
     !,
     atom_number(D,N).
 charge(['-',D|R],R,N) :-
-    char_type(D,digit),
+    is_digit(D),
     !,
     atom_number(D,N0),
     N is -N0.
@@ -340,12 +356,12 @@ atom_map([':'|R],Rest,N) :-
 atom_map(R,R,none).
 
 ring_token(['%',A,B|R],N,R) :-
-    char_type(A,digit),
-    char_type(B,digit),
+    is_digit(A),
+    is_digit(B),
     number_chars(N,[A,B]),
     !.
 ring_token([D|R],N,R) :-
-    char_type(D,digit),
+    is_digit(D),
     atom_number(D,N).
 
 close_ring(Label,Current,Bond,Bonds,BondsF) :-
