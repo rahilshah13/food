@@ -101,3 +101,7 @@
 ---
 ### `retire.pl`
 - `tpl -g "generate_schedules(N), halt." -l retire.pl`
+
+---
+### `tofacitinib.pl`
+- `tpl -g main tofacitinib.pl`
