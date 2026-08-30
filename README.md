@@ -105,3 +105,7 @@
 ---
 ### `tofacitinib.pl`
 - `tpl -g main tofacitinib.pl`
+
+---
+### `vedolizumab.pl`
+- `tpl -g main vedolizumab.pl`
