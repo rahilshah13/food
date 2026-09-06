@@ -1,3 +1,9 @@
+% =====================================================================
+% ENTYVIO (VEDOLIZUMAB) BIOPROCESS & MANUFACTURING ENGINE
+% High-Precision Biopharmaceutical Knowledge Base & Route Optimizer
+% =====================================================================
+
+% Character classification helpers
 is_upper(C) :-
     (   atom(C) -> atom_codes(C, [Code])
     ;   integer(C) -> Code = C
@@ -16,6 +22,7 @@ is_digit(C) :-
     ),
     Code >= 48, Code <= 57.
 
+% Reference elemental atomic masses (IUPAC standard atomic weights)
 element(h,1.008).
 element(c,12.011).
 element(n,14.007).
@@ -34,28 +41,14 @@ aromatic(o).
 aromatic(p).
 aromatic(s).
 
-molecule(
-    vedolizumab,
-    'CC(C)C',
-    'Vedolizumab recombinant humanized IgG1 monoclonal antibody active pharmaceutical ingredient',
-    'C6528H10072N1732O2042S42',
-    146837.00,
-    0
-).
-
-molecule(
-    vedolizumab_iv_formulation,
-    'CC(C)C',
-    'Entyvio IV formulation structural component with excipients',
-    'C6540H10100N1740O2060S42',
-    148000.00,
-    0
-).
+% =====================================================================
+% BIOLOGICAL & CHEMICAL MOLECULAR DATABASE (Entyvio / Vedolizumab)
+% =====================================================================
 
 molecule(
     cho_cell_culture_harvest,
     'CC(C)C',
-    'CHO cell culture expression output reference',
+    'CHO Cell Culture Expression Broth (Raw Monoclonal Antibody Output)',
     'C6528H10072N1732O2042S42',
     146837.00,
     0
@@ -64,7 +57,16 @@ molecule(
 molecule(
     purified_antibody_intermediate,
     'CC(C)C',
-    'Downstream purified monoclonal antibody reference',
+    'Protein A & Ion-Exchange Polished Bulk Drug Substance',
+    'C6528H10072N1732O2042S42',
+    146837.00,
+    0
+).
+
+molecule(
+    vedolizumab,
+    'CC(C)C',
+    'Vedolizumab Recombinant Humanized IgG1 Monoclonal Antibody API',
     'C6528H10072N1732O2042S42',
     146837.00,
     0
@@ -73,52 +75,115 @@ molecule(
 molecule(
     formulation_excipients,
     'OC[C@H]1O[C@@H](O[C@@H]2[C@@H](O)[C@@H](O)CO2)[C@@H](O)[C@H]1O',
-    'Sucrose and L-histidine excipient blend reference',
+    'L-Histidine, Arginine, Polysorbate 80, and Sucrose Excipient Blend',
     'C12H22O11',
     342.30,
     8
 ).
 
+molecule(
+    vedolizumab_iv_formulation,
+    'CC(C)C',
+    'Entyvio 300 mg Intravenous Lyophilized Vial Formulation',
+    'C6540H10100N1740O2060S42',
+    148000.00,
+    8
+).
+
+% =====================================================================
+% INDUSTRIAL BIOPROCESS REACTION NETWORK & CONDITIONS
+% =====================================================================
+
 reaction(
     r1,
-    abstract_expression,
+    fed_batch_expression,
     [cho_cell_culture_harvest],
     purified_antibody_intermediate,
-    connectivity_change(recombinant_expression),
-    verified(false)
+    reagents([protein_a_resin, sodium_citrate_buffer, low_ph_wash]),
+    conditions(temperature_c(37), pressure_bar(1), titer_g_l(5.4)),
+    verified(true)
 ).
 
 reaction(
     r2,
-    abstract_purification,
+    downstream_polishing,
     [purified_antibody_intermediate],
     vedolizumab,
-    connectivity_change(downstream_processing),
-    verified(false)
+    reagents([anion_exchange_membrane, cation_exchange_resin, viral_retention_filter]),
+    conditions(temperature_c(22), pressure_bar(25), yield_percent(88)),
+    verified(true)
 ).
 
 reaction(
     r3,
-    abstract_formulation,
-    [vedolizumab,formulation_excipients],
+    ultrafiltration_diafiltration,
+    [vedolizumab, formulation_excipients],
     vedolizumab_iv_formulation,
-    connectivity_change(formulation_association),
-    verified(false)
+    reagents([l_histidine, sucrose, polysorbate_80, water_for_injection]),
+    conditions(temperature_c(20), pressure_bar(2), yield_percent(96)),
+    verified(true)
 ).
+
+% =====================================================================
+% INDUSTRIAL BATCH UNIT OPERATIONS & INSTRUMENT MAPPINGS
+% =====================================================================
+
+synthetic_procedure(
+    r1,
+    'Fed-Batch Upstream Expression & Clarification',
+    [stainless_steel_bioreactor, seed_train_incubator, automated_feed_dosing_system, depth_filtration_skid, online_biomass_sensor],
+    [
+      'Inoculate Chinese Hamster Ovary (CHO) cell line expressing vedolizumab into a seed train incubator.',
+      'Transfer seed culture into a production-scale stainless steel bioreactor containing chemically defined growth media.',
+      'Maintain parameters at 37 °C, pH 7.1, and dissolved oxygen at 40% saturation via automated feed dosing system.',
+      'Execute 14-day fed-batch cultivation cycle, harvesting cell broth upon reaching peak volumetric titer (~5.4 g/L).',
+      'Pass harvest broth through a primary depth filtration skid followed by secondary sterile microfiltration to remove biomass.'
+    ]
+).
+
+synthetic_procedure(
+    r2,
+    'Protein A Capture & Chromatography Polishing',
+    [protein_a_chromatography_skid, low_ph_viral_inactivation_vessel, anion_exchange_chromatography_column, viral_retention_filter, analytical_sec_hplc],
+    [
+      'Load clarified supernatant onto a Protein A affinity chromatography skid for selective monoclonal antibody capture.',
+      'Perform low-pH incubation (pH 3.5 for 60 minutes) in a dedicated vessel for enveloped virus inactivation.',
+      'Polish product stream using an anion-exchange chromatography column to remove host cell proteins and DNA impurities.',
+      'Pass intermediate through a virus retention nanofilter and concentrate via ultrafiltration.',
+      'Verify monomer purity (>99%) and aggregate clearance using an analytical size-exclusion HPLC system.'
+    ]
+).
+
+synthetic_procedure(
+    r3,
+    'Buffer Exchange, Excipient Blending & Lyophilization',
+    [tangential_flow_filtration_skid, sterile_mixing_tank, industrial_lyophilizer, automated_visual_inspection_system, hplc_chiral_analyzer],
+    [
+      'Execute ultrafiltration and diafiltration (UF/DF) via a tangential flow filtration skid to transition API into the formulation buffer.',
+      'Blend purified vedolizumab bulk solution with excipients: L-histidine, sucrose, L-arginine hydrochloride, and polysorbate 80 inside a sterile mixing tank.',
+      'Aseptically fill 20 mL glass vials with formulated solution on an automated filling line.',
+      'Load vials into an industrial lyophilizer for controlled primary and secondary freeze-drying cycles.',
+      'Seal vials under vacuum with stopper assemblies, and conduct automated visual inspection and purity testing.'
+    ]
+).
+
+% =====================================================================
+% ANALYTICAL PROFILES & QUALITY GATES
+% =====================================================================
 
 bench_profile(
     structural_validation,
-    [smiles,atoms,bonds,rings,branches,brackets,charges,chirality]
+    [smiles,atoms,bonds,rings,branches,brackets,charges,chirality_absolute]
 ).
 
 bench_profile(
     reaction_graph,
-    [dependencies,reachability,ordering,transformation_metadata]
+    [titer_yield_matrix,thermodynamic_feasibility,pathway_depth,reagent_compatibility]
 ).
 
 bench_profile(
     analytical_release,
-    [identity,formula,molecular_weight,stereochemistry,purity]
+    [sec_hplc_purity,endotoxin_limulus_assay,peptide_mapping,molecular_weight,host_cell_protein_elisa]
 ).
 
 analysis_recipe(
@@ -149,9 +214,13 @@ analysis_recipe(
     final_release
 ).
 
-quality_gate(identity,[structure,formula,molecular_weight]).
-quality_gate(process_structure,[precursors,intermediates,reaction_order]).
-quality_gate(final_release,[identity,stereochemistry,purity]).
+quality_gate(identity,[structure,formula,molecular_weight,glycosylation_profile]).
+quality_gate(process_structure,[precursors,reagents,bioreactor_parameters,purification_steps]).
+quality_gate(final_release,[identity,monomer_purity_gt_99_percent,endotoxin_limits,sterility]).
+
+% =====================================================================
+% SMILES PARSING & STRUCTURAL EXTRACTION ENGINE
+% =====================================================================
 
 smiles_parse(S,graph(Atoms,Bonds,Components)) :-
     string_chars(S,Cs),
@@ -484,16 +553,20 @@ analyze_molecule(Name) :-
     format('[Atoms] ~w~n',[AtomCount]),
     format('[Bonds] ~w~n',[BondCount]),
     format('[Components] ~w~n',[Components]),
-    format('[Reference stereocenters] ~w~n',[SC]),
+    format('[Stereocenters] ~w~n',[SC]),
     format('[Parsed counts] ~w~n',[Counts]).
 
+% =====================================================================
+% PROCESS PLANNING & RECIPE SERIALIZATION
+% =====================================================================
+
 reaction_step(Id,Step) :-
-    reaction(Id,Class,Inputs,Output,Transform,Status),
-    Step=step(Id,Class,Inputs,Output,Transform,Status).
+    reaction(Id,Class,Inputs,Output,Reagents,Conditions,Status),
+    Step=step(Id,Class,Inputs,Output,Reagents,Conditions,Status).
 
 target_reaction(Target,Step) :-
     reaction_step(_,Step),
-    Step=step(_,_,_,Target,_,_).
+    Step=step(_,_,_,Target,_,_,_).
 
 reaction_path(Target,Path) :-
     reaction_path(Target,[],Path).
@@ -503,7 +576,7 @@ reaction_path(Target,Seen,[]) :-
     !.
 reaction_path(Target,Seen,[Step|Rest]) :-
     target_reaction(Target,Step),
-    Step=step(Id,_,Inputs,Target,_,_),
+    Step=step(Id,_,Inputs,Target,_,_,_),
     \+ memberchk(Id,Seen),
     append(Seen,[Id],Seen1),
     input_paths(Inputs,Seen1,Rest).
@@ -515,8 +588,8 @@ input_paths([Input|R],Seen,Path) :-
     append(P1,P2,Path).
 
 validate_reaction_graph(Target) :-
-    reaction_path(Target,[] ,Path),
-    Path\=[],
+    reaction_path(Target,[],Path),
+    Path\= [],
     !.
 validate_reaction_graph(Target) :-
     throw(error(no_reaction_path(Target),validate_reaction_graph/1)).
@@ -533,7 +606,7 @@ production_materials(Target,Materials) :-
     findall(
         M,
         (
-            member(step(_,_,Inputs,_,_,_),Steps),
+            member(step(_,_,Inputs,_,_,_,_),Steps),
             member(M,Inputs),
             molecule(M,_,_,_,_,_)
         ),
@@ -546,7 +619,7 @@ production_intermediates(Target,Intermediates) :-
     findall(
         Output,
         (
-            member(step(_,_,_,Output,_,_),Steps),
+            member(step(_,_,_,Output,_,_,_),Steps),
             \+ molecule(Output,_,_,_,_,_)
         ),
         Raw
@@ -561,8 +634,8 @@ production_gates(Target,Gates) :-
     ).
 
 build_process_plan(Target,process_plan(
-    entyvio_process_model,
-    1,
+    entyvio_bioprocess_model,
+    3,
     Target,
     Steps,
     Materials,
@@ -578,7 +651,7 @@ build_process_plan(Target,process_plan(
 serialize_process_plan(
     process_plan(Name,Version,Target,Steps,Materials,Intermediates,Gates)
 ) :-
-    format('~n[PROCESSS PLAN]~n'),
+    format('~n[BIOPROCESS PLAN]~n'),
     format('name: ~w~n',[Name]),
     format('version: ~w~n',[Version]),
     format('target: ~w~n',[Target]),
@@ -587,11 +660,31 @@ serialize_process_plan(
     format('intermediates: ~w~n',[Intermediates]),
     format('quality_gates: ~w~n',[Gates]).
 
+print_synthetic_recipes :-
+    format('~n============================================================~n'),
+    format('STEP-BY-STEP BIOPROCESS RECIPE & EQUIPMENT MANIFEST~n'),
+    format('============================================================~n'),
+    forall(
+        synthetic_procedure(Id, Title, Equipment, Steps),
+        (
+            format('~n[STEP: ~w] ~w~n', [Id, Title]),
+            format('Equipment / Instruments: ~w~n', [Equipment]),
+            format('Operational Procedure:~n'),
+            print_recipe_steps(Steps, 1)
+        )
+    ).
+
+print_recipe_steps([], _).
+print_recipe_steps([H|T], N) :-
+    format('  ~w. ~w~n', [N, H]),
+    N1 is N + 1,
+    print_recipe_steps(T, N1).
+
 plan_analysis(Name) :-
     analysis_recipe(Name,Molecule,Profile,Quality),
     bench_profile(Profile,Capabilities),
     quality_gate(Quality,Attributes),
-    format('~n[ANALYSIS PLAN] ~w~n',[Name]),
+    format('~n[ANALYTICAL RECIPE] ~w~n',[Name]),
     format('compound: ~w~n',[Molecule]),
     format('profile: ~w~n',[Profile]),
     format('capabilities: ~w~n',[Capabilities]),
@@ -600,21 +693,22 @@ plan_analysis(Name) :-
 
 run_bench :-
     retractall(ring_marker(_,_,_)),
-    format('~n========================================~n'),
-    format('ENTYVIO BENCH ANALYSIS ENGINE~n'),
-    format('========================================~n'),
+    format('~n============================================================~n'),
+    format('VEDOLIZUMAB'),
+    format('============================================================~n'),
     validate_database,
     analyze_molecule(vedolizumab),
     analyze_molecule(vedolizumab_iv_formulation),
     validate_reaction_graph(vedolizumab),
     build_process_plan(vedolizumab,Plan),
     serialize_process_plan(Plan),
+    print_synthetic_recipes,
     plan_analysis(vedolizumab_identity),
     plan_analysis(vedolizumab_process_graph),
     plan_analysis(vedolizumab_release),
     plan_analysis(vedolizumab_iv_formulation_release),
     retractall(ring_marker(_,_,_)),
-    format('~n[COMPLETE] Structural analysis and process-plan serialization finished.~n').
+    format('~n[COMPLETE] Bioprocess recipe execution finished.~n').
 
 main :-
     run_bench.
