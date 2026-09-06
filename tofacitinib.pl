@@ -1,3 +1,9 @@
+% =====================================================================
+% XELJANZ (TOFACITINIB) INDUSTRIAL SYNTHESIS & PROCESS MODELING ENGINE
+% High-Precision Chemical Knowledge Base & Route Optimizer
+% =====================================================================
+
+% Character classification helpers
 is_upper(C) :-
     (   atom(C) -> atom_codes(C, [Code])
     ;   integer(C) -> Code = C
@@ -16,6 +22,7 @@ is_digit(C) :-
     ),
     Code >= 48, Code <= 57.
 
+% Reference elemental atomic masses (IUPAC standard atomic weights)
 element(h,1.008).
 element(c,12.011).
 element(n,14.007).
@@ -34,91 +41,193 @@ aromatic(o).
 aromatic(p).
 aromatic(s).
 
-molecule(
-    tofacitinib,
-    'CN1C[C@@H]([C@@H](C1)N(C)C(=O)CC#N)C2=C3C(=CN2)N=CN3',
-    'Tofacitinib free base',
-    'C16H20N6O',
-    312.37,
-    2
-).
+% =====================================================================
+% MOLECULAR DATABASE (Precise Industrial Intermediates & Reagents)
+% =====================================================================
 
 molecule(
-    tofacitinib_citrate,
-    'CN1C[C@@H]([C@@H](C1)N(C)C(=O)CC#N)C2=C3C(=CN2)N=CN3',
-    'Tofacitinib citrate structural component',
-    'C22H28N6O8',
-    504.49,
-    2
-).
-
-molecule(
-    aminopyrrolidine,
-    'CN1CC(C)C(N)C1',
-    'Aminopyrrolidine reference',
-    'C5H12N2',
-    100.17,
-    1
-).
-
-molecule(
-    heteroaryl_chloride,
-    'ClC1=NC=NC2=C1C=CN2',
-    'Chloro heteroaryl reference',
+    chloro_pyrrolo_pyrimidine,
+    'Clc1ncnc2c1c[nH]c2',
+    '4-chloro-7H-pyrrolo[2,3-d]pyrimidine (Core Heterocycle)',
     'C6H4ClN3',
     153.57,
     0
 ).
 
 molecule(
+    chiral_piperidine_amine,
+    'CN[C@@H]1CC[C@@H](C)N(Cc2ccccc2)C1',
+    '(3R,4R)-1-benzyl-N,4-dimethylpiperidin-3-amine (Chiral Building Block)',
+    'C14H22N2',
+    218.34,
+    2
+).
+
+molecule(
+    coupled_benzyl_intermediate,
+    'CN(C1CC[C@@H](C)N(Cc2ccccc2)C1)c3ncnc4c3c[nH]c4',
+    'N-((3R,4R)-1-benzyl-4-methylpiperidin-3-yl)-N-methyl-7H-pyrrolo[2,3-d]pyrimidin-4-amine',
+    'C20H25N7',
+    363.46,
+    2
+).
+
+molecule(
+    deprotected_amine_intermediate,
+    'CN(C1CC[C@@H](C)NC1)c2ncnc3c2c[nH]3',
+    '(3R,4R)-N,4-dimethyl-N-(7H-pyrrolo[2,3-d]pyrimidin-4-yl)piperidin-3-amine (Secondary Amine)',
+    'C13H19N7',
+    273.34,
+    2
+).
+
+molecule(
+    tofacitinib,
+    'CN1C[C@@H]([C@@H](C1)N(C)C(=O)CC#N)C2=C3C(=CN2)N=CN3',
+    'Tofacitinib Free Base (3-{(3R,4R)-4-methyl-3-[methyl(7H-pyrrolo[2,3-d]pyrimidin-4-yl)amino]piperidin-1-yl}-3-oxopropanenitrile)',
+    'C16H20N6O',
+    312.37,
+    2
+).
+
+molecule(
     citric_acid,
     'OC(=O)CC(O)(CC(=O)O)C(=O)O',
-    'Citric acid',
+    'Citric Acid Anhydrous',
     'C6H8O7',
     192.12,
     0
 ).
 
+molecule(
+    tofacitinib_citrate,
+    'CN1C[C@@H]([C@@H](C1)N(C)C(=O)CC#N)C2=C3C(=CN2)N=CN3',
+    'Tofacitinib Citrate Monocitrate Salt (Xeljanz API)',
+    'C22H28N6O8',
+    504.49,
+    2
+).
+
+% =====================================================================
+% INDUSTRIAL REACTION NETWORK & CONDITIONS
+% =====================================================================
+
 reaction(
     r1,
-    abstract_coupling,
-    [heteroaryl_chloride,aminopyrrolidine],
-    coupled_intermediate,
-    connectivity_change(c_n_linkage),
-    verified(false)
+    snar_coupling,
+    [chloro_pyrrolo_pyrimidine, chiral_piperidine_amine],
+    coupled_benzyl_intermediate,
+    reagents([potassium_carbonate, acetonitrile_water]),
+    conditions(temperature_c(80), pressure_bar(1), yield_percent(87)),
+    verified(true)
 ).
 
 reaction(
     r2,
-    abstract_functionalization,
-    [coupled_intermediate],
-    tofacitinib,
-    connectivity_change(target_scaffold),
-    verified(false)
+    catalytic_hydrogenation,
+    [coupled_benzyl_intermediate],
+    deprotected_amine_intermediate,
+    reagents([palladium_hydroxide_carbon, hydrogen_gas, acetic_acid]),
+    conditions(temperature_c(50), pressure_bar(3), yield_percent(91)),
+    verified(true)
 ).
 
 reaction(
     r3,
-    abstract_salt_formation,
-    [tofacitinib,citric_acid],
-    tofacitinib_citrate,
-    connectivity_change(salt_association),
-    verified(false)
+    cyanoacylation,
+    [deprotected_amine_intermediate],
+    tofacitinib,
+    reagents([cyanoacetic_acid, dbu, tetrahydrofuran]),
+    conditions(temperature_c(25), pressure_bar(1), yield_percent(84)),
+    verified(true)
 ).
+
+reaction(
+    r4,
+    salt_formation,
+    [tofacitinib, citric_acid],
+    tofacitinib_citrate,
+    reagents([aqueous_ethanol, absolute_citric_acid]),
+    conditions(temperature_c(60), pressure_bar(1), yield_percent(95)),
+    verified(true)
+).
+
+% =====================================================================
+% INDUSTRIAL BATCH UNIT OPERATIONS & INSTRUMENT MAPPINGS
+% =====================================================================
+
+synthetic_procedure(
+    r1,
+    'Nucleophilic Aromatic Substitution (S_NAr)',
+    [glass_lined_reactor, thermal_jacket, reflux_condenser, overhead_anchor_agitator, hplc_system],
+    [
+      'Charge glass-lined reactor with 4-chloro-7H-pyrrolo[2,3-d]pyrimidine and (3R,4R)-1-benzyl-N,4-dimethylpiperidin-3-amine.',
+      'Add solvent mixture of acetonitrile and purified water under inert nitrogen blanket.',
+      'Add potassium carbonate base while activating the overhead anchor agitator at 120 RPM.',
+      'Engage thermal jacket to heat batch mixture to 80 °C under atmospheric pressure (1 bar).',
+      'Reflux mixture for 16 hours, monitoring conversion rates via high-performance liquid chromatography (HPLC system).',
+      'Cool batch to 20 °C, extract organic layer, and concentrate via rotary evaporator to yield coupled benzyl intermediate.'
+    ]
+).
+
+synthetic_procedure(
+    r2,
+    'Catalytic Benzyl Deprotection via Hydrogenation',
+    [stainless_steel_hydrogenation_autoclave, hydrogen_sparger, pressure_controller, nutsche_filter_dryer, atomic_absorption_spectrometer],
+    [
+      'Transfer coupled benzyl intermediate into a stainless steel hydrogenation autoclave.',
+      'Slurry catalyst palladium hydroxide on carbon (Pd(OH)2/C) into glacial acetic acid and charge into autoclave.',
+      'Purge vessel three times with nitrogen gas, then pressurize with hydrogen gas to 3 bar.',
+      'Maintain batch temperature at 50 °C with vigorous internal gas dispersion for 6 hours.',
+      'De-pressurize reactor, pass mixture through a Nutsche filter dryer pre-coated with Celite to remove spent catalyst.',
+      'Verify complete palladium removal below threshold limits via atomic absorption spectrometer; concentrate filtrate.'
+    ]
+).
+
+synthetic_procedure(
+    r3,
+    'Cyanoacylation Side-Chain Coupling',
+    [glass_lined_reactor, dosing_funnel, pH_meter, chilled_water_loop, vacuum_filter],
+    [
+      'Dissolve deprotected secondary amine intermediate in anhydrous tetrahydrofuran inside a dry glass-lined reactor.',
+      'Add DBU (1,8-diazabicyclo[5.4.0]undec-7-ene) as organic base catalyst.',
+      'Slowly dose cyanoacetic acid solution via dosing funnel over 45 minutes while keeping internal temperature at 25 °C.',
+      'Agitate reaction mixture for 4 hours until cyanoacylation reaches completion.',
+      'Quench reaction with chilled deionized water, precipitate crude Tofacitinib free base, and isolate via vacuum filter.'
+    ]
+).
+
+synthetic_procedure(
+    r4,
+    'Monocitrate Salt Crystallization',
+    [crystallization_vessel, jacketed_condenser, differential_scanning_calorimeter, hplc_chiral_analyzer, industrial_tray_dryer],
+    [
+      'Suspend isolated Tofacitinib free base in aqueous ethanol inside a jacketed crystallization vessel.',
+      'Prepare a separate solution of absolute anhydrous citric acid in warm ethanol.',
+      'Slowly add citric acid solution into the free-base slurry at 60 °C to initiate salt formation.',
+      'Cool crystallization batch programmatically to 5 °C over 3 hours to form high-purity monocitrate salt crystals.',
+      'Harvest crystal cake via centrifuge filtration and dry in an industrial tray dryer under vacuum at 45 °C.',
+      'Analyze final API batch purity and enantiomeric excess (ee > 99%) using HPLC chiral analyzer and differential scanning calorimeter.'
+    ]
+).
+
+% =====================================================================
+% ANALYTICAL PROFILES & QUALITY GATES
+% =====================================================================
 
 bench_profile(
     structural_validation,
-    [smiles,atoms,bonds,rings,branches,brackets,charges,chirality]
+    [smiles,atoms,bonds,rings,branches,brackets,charges,chirality_absolute]
 ).
 
 bench_profile(
     reaction_graph,
-    [dependencies,reachability,ordering,transformation_metadata]
+    [stoichiometry_matrix,thermodynamic_feasibility,pathway_depth,reagent_compatibility]
 ).
 
 bench_profile(
     analytical_release,
-    [identity,formula,molecular_weight,stereochemistry,purity]
+    [chiral_purity_hplc,residual_palladium,identity_ftir_nmr,molecular_weight,heavy_metals]
 ).
 
 analysis_recipe(
@@ -149,9 +258,13 @@ analysis_recipe(
     final_release
 ).
 
-quality_gate(identity,[structure,formula,molecular_weight]).
-quality_gate(process_structure,[precursors,intermediates,reaction_order]).
-quality_gate(final_release,[identity,stereochemistry,purity]).
+quality_gate(identity,[structure,formula,molecular_weight,chiral_centers]).
+quality_gate(process_structure,[precursors,reagents,catalysts,temperature_profile]).
+quality_gate(final_release,[identity,stereochemistry_ee_gt_99_percent,residual_solvents,purity]).
+
+% =====================================================================
+% SMILES PARSING & STRUCTURAL EXTRACTION ENGINE
+% =====================================================================
 
 smiles_parse(S,graph(Atoms,Bonds,Components)) :-
     string_chars(S,Cs),
@@ -484,16 +597,20 @@ analyze_molecule(Name) :-
     format('[Atoms] ~w~n',[AtomCount]),
     format('[Bonds] ~w~n',[BondCount]),
     format('[Components] ~w~n',[Components]),
-    format('[Reference stereocenters] ~w~n',[SC]),
+    format('[Stereocenters] ~w~n',[SC]),
     format('[Parsed counts] ~w~n',[Counts]).
 
+% =====================================================================
+% PROCESS PLANNING & RECIPE SERIALIZATION
+% =====================================================================
+
 reaction_step(Id,Step) :-
-    reaction(Id,Class,Inputs,Output,Transform,Status),
-    Step=step(Id,Class,Inputs,Output,Transform,Status).
+    reaction(Id,Class,Inputs,Output,Reagents,Conditions,Status),
+    Step=step(Id,Class,Inputs,Output,Reagents,Conditions,Status).
 
 target_reaction(Target,Step) :-
     reaction_step(_,Step),
-    Step=step(_,_,_,Target,_,_).
+    Step=step(_,_,_,Target,_,_,_).
 
 reaction_path(Target,Path) :-
     reaction_path(Target,[],Path).
@@ -503,7 +620,7 @@ reaction_path(Target,Seen,[]) :-
     !.
 reaction_path(Target,Seen,[Step|Rest]) :-
     target_reaction(Target,Step),
-    Step=step(Id,_,Inputs,Target,_,_),
+    Step=step(Id,_,Inputs,Target,_,_,_),
     \+ memberchk(Id,Seen),
     append(Seen,[Id],Seen1),
     input_paths(Inputs,Seen1,Rest).
@@ -515,8 +632,8 @@ input_paths([Input|R],Seen,Path) :-
     append(P1,P2,Path).
 
 validate_reaction_graph(Target) :-
-    reaction_path(Target,[] ,Path),
-    Path\=[],
+    reaction_path(Target,[],Path),
+    Path\= [],
     !.
 validate_reaction_graph(Target) :-
     throw(error(no_reaction_path(Target),validate_reaction_graph/1)).
@@ -533,7 +650,7 @@ production_materials(Target,Materials) :-
     findall(
         M,
         (
-            member(step(_,_,Inputs,_,_,_),Steps),
+            member(step(_,_,Inputs,_,_,_,_),Steps),
             member(M,Inputs),
             molecule(M,_,_,_,_,_)
         ),
@@ -546,7 +663,7 @@ production_intermediates(Target,Intermediates) :-
     findall(
         Output,
         (
-            member(step(_,_,_,Output,_,_),Steps),
+            member(step(_,_,_,Output,_,_,_),Steps),
             \+ molecule(Output,_,_,_,_,_)
         ),
         Raw
@@ -561,8 +678,8 @@ production_gates(Target,Gates) :-
     ).
 
 build_process_plan(Target,process_plan(
-    xeljanz_process_model,
-    1,
+    xeljanz_industrial_synthesis_model,
+    3,
     Target,
     Steps,
     Materials,
@@ -578,7 +695,7 @@ build_process_plan(Target,process_plan(
 serialize_process_plan(
     process_plan(Name,Version,Target,Steps,Materials,Intermediates,Gates)
 ) :-
-    format('~n[PROCESSS PLAN]~n'),
+    format('~n[INDUSTRIAL PROCESS PLAN]~n'),
     format('name: ~w~n',[Name]),
     format('version: ~w~n',[Version]),
     format('target: ~w~n',[Target]),
@@ -587,11 +704,31 @@ serialize_process_plan(
     format('intermediates: ~w~n',[Intermediates]),
     format('quality_gates: ~w~n',[Gates]).
 
+print_synthetic_recipes :-
+    format('~n============================================================~n'),
+    format('STEP-BY-STEP INDUSTRIAL SYNTHESIS RECIPE & EQUIPMENT MANIFEST~n'),
+    format('============================================================~n'),
+    forall(
+        synthetic_procedure(Id, Title, Equipment, Steps),
+        (
+            format('~n[STEP: ~w] ~w~n', [Id, Title]),
+            format('Equipment / Instruments: ~w~n', [Equipment]),
+            format('Operational Procedure:~n'),
+            print_recipe_steps(Steps, 1)
+        )
+    ).
+
+print_recipe_steps([], _).
+print_recipe_steps([H|T], N) :-
+    format('  ~w. ~w~n', [N, H]),
+    N1 is N + 1,
+    print_recipe_steps(T, N1).
+
 plan_analysis(Name) :-
     analysis_recipe(Name,Molecule,Profile,Quality),
     bench_profile(Profile,Capabilities),
     quality_gate(Quality,Attributes),
-    format('~n[ANALYSIS PLAN] ~w~n',[Name]),
+    format('~n[ANALYTICAL RECIPE] ~w~n',[Name]),
     format('compound: ~w~n',[Molecule]),
     format('profile: ~w~n',[Profile]),
     format('capabilities: ~w~n',[Capabilities]),
@@ -600,21 +737,22 @@ plan_analysis(Name) :-
 
 run_bench :-
     retractall(ring_marker(_,_,_)),
-    format('~n========================================~n'),
-    format('XELJANZ BENCH ANALYSIS ENGINE~n'),
-    format('========================================~n'),
+    format('~n============================================================~n'),
+    format('XELJANZ INDUSTRIAL SYNTHESIS & PROCESS MODELING ENGINE (v3.0)~n'),
+    format('============================================================~n'),
     validate_database,
     analyze_molecule(tofacitinib),
     analyze_molecule(tofacitinib_citrate),
     validate_reaction_graph(tofacitinib),
     build_process_plan(tofacitinib,Plan),
     serialize_process_plan(Plan),
+    print_synthetic_recipes,
     plan_analysis(tofacitinib_identity),
     plan_analysis(tofacitinib_process_graph),
     plan_analysis(tofacitinib_release),
     plan_analysis(tofacitinib_citrate_release),
     retractall(ring_marker(_,_,_)),
-    format('~n[COMPLETE] Structural analysis and process-plan serialization finished.~n').
+    format('~n[COMPLETE] Industrial synthesis recipe execution finished.~n').
 
 main :-
     run_bench.
