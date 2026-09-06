@@ -1,0 +1,188 @@
+% =====================================================================
+% HUMAN PATHWAY TOPOLOGY
+% =====================================================================
+
+:- dynamic(pathway/2).
+:- dynamic(pathway_trigger/3).
+:- dynamic(pathway_edge/4).
+
+% ---------------------------------------------------------------------
+% 1. CANONICAL PATHWAY DEFINITIONS
+% ---------------------------------------------------------------------
+
+pathway(pi3k_akt_mtor, 'PI3K/AKT/mTOR Signaling Pathway').
+pathway(mapk_erk, 'MAPK/ERK Signaling Cascade').
+pathway(camp_pka, 'GPCR/cAMP/PKA Signaling Pathway').
+pathway(intrinsic_apoptosis, 'Intrinsic Apoptosis Pathway').
+pathway(wnt_beta_catenin, 'Wnt/Beta-Catenin Signaling Pathway').
+pathway(nf_kb_signaling, 'NF-kappaB Inflammatory Pathway').
+pathway(hif_hypoxia, 'HIF Hypoxia Response Pathway').
+pathway(jak_stat, 'JAK/STAT Cytokine Signaling Pathway').
+pathway(notch_signaling, 'Notch Signaling Pathway').
+pathway(hedgehog_signaling, 'Hedgehog Signaling Pathway').
+pathway(tgf_beta, 'TGF-Beta Receptor Signaling Pathway').
+pathway(tlr_signaling, 'Toll-Like Receptor Signaling Pathway').
+pathway(cell_cycle_checkpoint, 'ATM/ATR Cell Cycle Checkpoint Pathway').
+pathway(insulin_signaling, 'Insulin Receptor Signaling Pathway').
+pathway(extrinsic_apoptosis, 'Extrinsic (Death Receptor) Apoptosis Pathway').
+pathway(erbb_signaling, 'ErbB Receptor Signaling Network').
+pathway(fcal_adhesion, 'Focal Adhesion Kinase (FAK) Signaling Pathway').
+pathway(tcr_signaling, 'T-Cell Receptor Signaling Pathway').
+pathway(bcr_signaling, 'B-Cell Receptor Signaling Pathway').
+pathway(mTOR_autophagy, 'mTOR-Regulated Autophagy Pathway').
+
+% ---------------------------------------------------------------------
+% 2. PATHWAY TRIGGER ENTRYPOINTS
+% ---------------------------------------------------------------------
+
+pathway_trigger(pi3k_akt_mtor, egfr, ligand_binding_egf_or_insulin).
+pathway_trigger(mapk_erk, egfr, growth_factor_receptor_dimerization).
+pathway_trigger(camp_pka, adrb2, catecholamine_agonist_binding).
+pathway_trigger(intrinsic_apoptosis, bcl2, cellular_stress_or_dna_damage).
+pathway_trigger(wnt_beta_catenin, fzd1, wnt_protein_extracellular_ligand_binding).
+pathway_trigger(nf_kb_signaling, tlr4, lipopolysaccharide_lps_recognition).
+pathway_trigger(hif_hypoxia, egln1, low_intracellular_oxygen_tension).
+pathway_trigger(jak_stat, il6r, interleukin_6_cytokine_dimerization).
+pathway_trigger(notch_signaling, notch1, ligand_delta_like_binding).
+pathway_trigger(hedgehog_signaling, smo, sonic_hedgehog_ligand_binding).
+pathway_trigger(tgf_beta, tgfbr1, tgf_beta_dimer_binding).
+pathway_trigger(tlr_signaling, tlr2, microbial_lipopeptide_recognition).
+pathway_trigger(cell_cycle_checkpoint, atm, double_strand_dna_break).
+pathway_trigger(insulin_signaling, insr, insulin_peptide_binding).
+pathway_trigger(extrinsic_apoptosis, fas, fas_ligand_multimerization).
+pathway_trigger(erbb_signaling, her2, erbb2_heterodimerization).
+pathway_trigger(fcal_adhesion, ptk2, integrin_clustering_at_extracellular_matrix).
+pathway_trigger(tcr_signaling, lck, antigen_mhc_complex_binding).
+pathway_trigger(bcr_signaling, lyn, antigen_crosslinking_of_b_cell_receptor).
+pathway_trigger(mTOR_autophagy, ulk1, nutrient_deprivation_stress).
+
+% ---------------------------------------------------------------------
+% 3. EXHAUSTIVE SERIALIZED PATHWAY EDGES (Directed Graph with Cycles)
+% ---------------------------------------------------------------------
+
+% --- PI3K/AKT/mTOR Pathway Edges ---
+pathway_edge(pi3k_akt_mtor, egfr, pik3ca, activates).
+pathway_edge(pi3k_akt_mtor, pik3ca, pip3, produces).
+pathway_edge(pi3k_akt_mtor, pip3, akt1, recruits_and_activates).
+pathway_edge(pi3k_akt_mtor, akt1, mtor, activates_mtorc1).
+pathway_edge(pi3k_akt_mtor, mtor, p70s6k, phosphorylates).
+pathway_edge(pi3k_akt_mtor, mtor, irs1, inhibits_feedback).
+pathway_edge(pi3k_akt_mtor, irs1, pik3ca, activates_cycle).
+
+% --- MAPK/ERK Cascade Edges ---
+pathway_edge(mapk_erk, egfr, kras, activates).
+pathway_edge(mapk_erk, kras, braf, activates).
+pathway_edge(mapk_erk, braf, map2k1, phosphorylates).
+pathway_edge(mapk_erk, map2k1, mapk1, phosphorylates).
+pathway_edge(mapk_erk, mapk1, sos1, phosphorylates_feedback).
+pathway_edge(mapk_erk, sos1, kras, activates_cycle).
+
+% --- GPCR / cAMP / PKA Pathway Edges ---
+pathway_edge(camp_pka, adrb2, g_s_protein, activates).
+pathway_edge(camp_pka, g_s_protein, adenylyl_cyclase, stimulates).
+pathway_edge(camp_pka, adenylyl_cyclase, camp, produces).
+pathway_edge(camp_pka, camp, pka, activates).
+pathway_edge(camp_pka, pka, pde4d, activates_feedback).
+pathway_edge(camp_pka, pde4d, camp, degrades_cycle).
+
+% --- Intrinsic Apoptosis Pathway Edges ---
+pathway_edge(intrinsic_apoptosis, bcl2, bax, inhibits).
+pathway_edge(intrinsic_apoptosis, bax, momp, promotes).
+pathway_edge(intrinsic_apoptosis, momp, cytochrome_c, releases).
+pathway_edge(intrinsic_apoptosis, cytochrome_c, apaf1, binds).
+pathway_edge(intrinsic_apoptosis, apaf1, casp9, activates).
+pathway_edge(intrinsic_apoptosis, casp9, casp3, cleaves_and_activates).
+pathway_edge(intrinsic_apoptosis, casp3, bcl2, cleaves_and_inactivates_feedback).
+
+% --- Wnt / Beta-Catenin Pathway Edges ---
+pathway_edge(wnt_beta_catenin, fzd1, dishevelled, activates).
+pathway_edge(wnt_beta_catenin, dishevelled, gsk3b, inhibits).
+pathway_edge(wnt_beta_catenin, gsk3b, beta_catenin, inhibits_degradation).
+pathway_edge(wnt_beta_catenin, beta_catenin, tcf_lef_transcription, activates).
+pathway_edge(wnt_beta_catenin, tcf_lef_transcription, axin2, upregulates_feedback).
+pathway_edge(wnt_beta_catenin, axin2, gsk3b, binds_and_represses_cycle).
+
+% --- NF-kappaB Inflammatory Pathway Edges ---
+pathway_edge(nf_kb_signaling, tlr4, myd88, recruits).
+pathway_edge(nf_kb_signaling, myd88, ikk_complex, activates).
+pathway_edge(nf_kb_signaling, ikk_complex, ikb_alpha, phosphorylates).
+pathway_edge(nf_kb_signaling, ikb_alpha, nf_kb_p65, releases).
+pathway_edge(nf_kb_signaling, nf_kb_p65, nfkbia_transcription, upregulates_feedback).
+pathway_edge(nf_kb_signaling, nfkbia_transcription, ikb_alpha, replenishes_cycle).
+
+% --- HIF Hypoxia Response Pathway Edges ---
+pathway_edge(hif_hypoxia, egln1, hif1a, hydroxylates_and_degrades_under_normoxia).
+pathway_edge(hif_hypoxia, hif1a, vegfa, transcribes_under_hypoxia).
+pathway_edge(hif_hypoxia, vegfa, epo, coregulates).
+
+% --- JAK/STAT Cytokine Signaling Pathway Edges ---
+pathway_edge(jak_stat, il6r, jak1, activates).
+pathway_edge(jak_stat, jak1, stat3, phosphorylates).
+pathway_edge(jak_stat, stat3, socs3, upregulates_feedback).
+pathway_edge(jak_stat, socs3, jak1, inhibits_cycle).
+
+% --- Notch Signaling Pathway Edges ---
+pathway_edge(notch_signaling, notch1, nicd_cleavage, initiates_proteolysis).
+pathway_edge(notch_signaling, nicd_cleavage, hes1_transcription, activates).
+pathway_edge(notch_signaling, hes1_transcription, notch1, represses_feedback).
+
+% --- Hedgehog Signaling Pathway Edges ---
+pathway_edge(hedgehog_signaling, smo, sufu, dissociates).
+pathway_edge(hedgehog_signaling, sufu, gli1, activates).
+pathway_edge(hedgehog_signaling, gli1, ptc1_transcription, upregulates_feedback).
+pathway_edge(hedgehog_signaling, ptc1_transcription, smo, inhibits_cycle).
+
+% --- TGF-Beta Signaling Pathway Edges ---
+pathway_edge(tgf_beta, tgfbr1, smad2, phosphorylates).
+pathway_edge(tgf_beta, smad2, smad4, complexes_with).
+pathway_edge(tgf_beta, smad4, smad7_transcription, activates).
+pathway_edge(tgf_beta, smad7_transcription, tgfbr1, inhibits_feedback).
+
+% --- Toll-Like Receptor Signaling Pathway Edges ---
+pathway_edge(tlr_signaling, tlr2, tirap, recruits).
+pathway_edge(tlr_signaling, tirap, myd88, activates).
+pathway_edge(tlr_signaling, myd88, irak4, phosphorylates).
+pathway_edge(tlr_signaling, irak4, traf6, activates).
+
+% --- Cell Cycle Checkpoint Pathway Edges ---
+pathway_edge(cell_cycle_checkpoint, atm, chk2, phosphorylates).
+pathway_edge(cell_cycle_checkpoint, chk2, tp53, stabilizes).
+pathway_edge(cell_cycle_checkpoint, tp53, cdkn1a, transcribes).
+pathway_edge(cell_cycle_checkpoint, cdkn1a, atm, inhibits_feedback).
+
+% --- Insulin Receptor Signaling Pathway Edges ---
+pathway_edge(insulin_signaling, insr, irs1, phosphorylates).
+pathway_edge(insulin_signaling, irs1, pik3ca, activates).
+pathway_edge(insulin_signaling, pik3ca, akt1, activates).
+pathway_edge(insulin_signaling, akt1, slc2a4, translocates_membrane).
+
+% --- Extrinsic Apoptosis Pathway Edges ---
+pathway_edge(extrinsic_apoptosis, fas, fas_associated_death_domain, recruits).
+pathway_edge(extrinsic_apoptosis, fas_associated_death_domain, casp8, activates).
+pathway_edge(extrinsic_apoptosis, casp8, casp3, cleaves_and_activates).
+pathway_edge(extrinsic_apoptosis, casp3, fas, cleaves_feedback).
+
+% --- ErbB Receptor Signaling Network Edges ---
+pathway_edge(erbb_signaling, her2, src, activates).
+pathway_edge(erbb_signaling, src, focal_adhesion_kinases, phosphorylates).
+pathway_edge(erbb_signaling, focal_adhesion_kinases, erk, stimulates).
+
+% --- Focal Adhesion Kinase Signaling Edges ---
+pathway_edge(fcal_adhesion, ptk2, src, binds_and_activates).
+pathway_edge(fcal_adhesion, src, paxillin, phosphorylates).
+pathway_edge(fcal_adhesion, paxillin, rho_gtpases, modulates).
+
+% --- T-Cell Receptor Signaling Edges ---
+pathway_edge(tcr_signaling, lck, zap70, phosphorylates).
+pathway_edge(tcr_signaling, zap70, lat, recruits).
+pathway_edge(tcr_signaling, lat, plc_gamma1, activates).
+
+% --- B-Cell Receptor Signaling Edges ---
+pathway_edge(bcr_signaling, lyn, syk, phosphorylates).
+pathway_edge(bcr_signaling, syk, btk, activates).
+pathway_edge(bcr_signaling, btk, plcg2, activates).
+
+% --- mTOR-Regulated Autophagy Pathway Edges ---
+pathway_edge(mTOR_autophagy, ulk1, atg13, phosphorylates).
+pathway_edge(mTOR_autophagy, atg13, autophagosome_membrane, nucleates).
+pathway_edge(mTOR_autophagy, autophagosome_membrane, mtor, inhibits_feedback).
