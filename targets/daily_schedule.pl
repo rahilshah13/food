@@ -1,5 +1,5 @@
 % =====================================================================
-% `tpl -g "daily_biological_pathways_schedule, halt." daily_schedule.pl`
+% `tpl -g "daily_biological_pathways_schedule([]), halt." daily_schedule.pl`
 % =====================================================================
 
 :- forall(between(1, 12, I), (
@@ -12,9 +12,128 @@
 :- dynamic(biological_process/3).
 :- dynamic(process_pathway/2).
 :- dynamic(process_lambda/3).
+:- dynamic(arriving_signal/4).
+:- dynamic(active_drug_concentration/3).
 
 % ---------------------------------------------------------------------
-% 1. HIGH-LEVEL HUMAN BIOLOGICAL PROCESSES & SYSTEMS 
+% 1. SMILES PARSER & ISOMER ENGINE (E/Z Supported)
+% ---------------------------------------------------------------------
+
+is_upper(C) :- atom_codes(C, [Code]), Code >= 65, Code <= 90.
+is_lower(C) :- atom_codes(C, [Code]), Code >= 97, Code <= 122.
+is_digit(C) :- atom_codes(C, [Code]), Code >= 48, Code <= 57.
+
+element(h, 1.008). element(c, 12.011). element(n, 14.007). element(o, 15.999).
+element(f, 18.998). element(cl, 35.450). element(mg, 24.305).
+aromatic(c). aromatic(n). aromatic(o). aromatic(s).
+
+smiles_parse(S, graph(Atoms, Bonds)) :-
+    string_chars(S, Cs), parse_stream(Cs, none, [], Atoms, Bonds).
+
+parse_stream([], none, _, [], []) :- !.
+parse_stream(Cs, Current, Pending, Atoms, Bonds) :-
+    bond_prefix(Cs, Pending1, R1),
+    atom_token(R1, Atom, R2),
+    Atoms = [node(Next, Atom) | RestAtoms],
+    Next = 1, % Simplified node mapping for structural validation
+    (Current \= none -> Bonds = [edge(Current, Next, Pending1) | RestBonds] ; Bonds = RestBonds),
+    parse_stream(R2, Next, none, RestAtoms, RestBonds).
+parse_stream(_, _, _, [], []).
+
+bond_prefix(['-'|R], single, R) :- !.
+bond_prefix(['='|R], double, R) :- !.
+bond_prefix(['#'|R], triple, R) :- !.
+bond_prefix([':'|R], aromatic, R) :- !.
+bond_prefix(['/'|R], up, R) :- !.     % E/Z Isomer representation (trans/cis)
+bond_prefix(['\\'|R], down, R) :- !.  % E/Z Isomer representation (trans/cis)
+bond_prefix(['~'|R], any, R) :- !.
+bond_prefix(R, none, R).
+
+atom_token(['['|R], atom(bracketed), Rest) :- append(_, [']'|Rest], R), !.
+atom_token([A,B|R], atom(E), R) :- is_upper(A), is_lower(B), atom_chars(E, [A,B]), !.
+atom_token([A|R], atom(E), R) :- is_upper(A), downcase_atom(A, E), !.
+atom_token([A|R], atom(E), R) :- is_lower(A), atom_chars(E, [A]), !.
+atom_token([C|R], atom(C), R).
+
+% ---------------------------------------------------------------------
+% 2. PHARMACOLOGICAL KNOWLEDGE BASE & CASCADE GRAPH
+% ---------------------------------------------------------------------
+
+% molecule_target(SMILES, TargetID, Mechanism, Params).
+molecule_target('CC(C1=C(C)C(=CC=C1)C)C2=CN=CN2', adra2a, orthosteric_agonist, [kd(0.5), emax(2.0)]).
+molecule_target('CN1C(=O)CN=C(C2=C1C=CC(=C2)Cl)C3=CC=CC=C3', gaba_a_system, allosteric_pam, [kb(0.2), alpha(3.0), beta(1.5)]).
+molecule_target('CC1=NN(C(=C1C(=O)NC2CCCCC2)C3=CC=C(C=C3)Cl)C4=CC(=CC(=C4)Cl)Cl', cb1_receptor, orthosteric_inverse_agonist, [kd(1.2), emax(-1.5)]).
+
+% target_process(TargetID, HighLevelSystemID)
+target_process(adra2a, hpa_stress_axis).
+target_process(gaba_a_system, central_nervous_system).
+target_process(cb1_receptor, appetite_satiety_axis).
+
+% cascade_edge(SourceSystem, DestSystem, Mechanism, Params, DelayHours).
+cascade_edge(hpa_stress_axis, immune_system, orthosteric_inverse_agonist, [kd(1.0), emax(-0.8)], 2).
+cascade_edge(central_nervous_system, respiratory_system, orthosteric_inverse_agonist, [kd(0.5), emax(-0.4)], 1).
+cascade_edge(appetite_satiety_axis, lipid_energy_mobilization, orthosteric_agonist, [kd(0.8), emax(1.0)], 3).
+
+% ---------------------------------------------------------------------
+% 3. PHARMACOKINETICS (PK) & PHARMACODYNAMICS (PD)
+% ---------------------------------------------------------------------
+
+estimate_pk_params(po, 1.2, 0.3, 50). 
+estimate_pk_params(iv, 10.0, 0.8, 20). 
+
+calculate_concentration(Dose, Route, AdminTime, EvalHour, Conc) :-
+    estimate_pk_params(Route, Ka, Ke, Vd),
+    Elapsed is (EvalHour - AdminTime + 24) mod 24,
+    Conc is (Dose * Ka / (Vd * abs(Ka - Ke))) * (exp(-Ke * Elapsed) - exp(-Ka * Elapsed)).
+
+calculate_mechanism_effect(Mechanism, Conc, Params, _Tone, Modifier) :-
+    member(Mechanism, [orthosteric_agonist, orthosteric_inverse_agonist]),
+    member(kd(Kd), Params),
+    member(emax(Emax), Params),
+    Modifier is (Emax * Conc) / (Conc + Kd).
+
+calculate_mechanism_effect(allosteric_pam, Conc, Params, Tone, Modifier) :-
+    member(kb(Kb), Params), member(alpha(Alpha), Params), member(beta(Beta), Params),
+    BRatio is Conc / Kb,
+    (Tone =< 0.1 -> Modifier = 0 ; 
+        Numerator is Tone * (1 + Beta * BRatio),
+        Denominator is Tone * (1 + Alpha * BRatio) + 1 * (1 + BRatio),
+        Baseline is Tone / (Tone + 1),
+        ModulatedState is Numerator / Denominator,
+        Modifier is ModulatedState - Baseline
+    ).
+
+% ---------------------------------------------------------------------
+% 4. TEMPORAL CASCADE ROUTING
+% ---------------------------------------------------------------------
+
+trigger_cascade(PrimaryTarget, Hour, InitialSignal) :-
+    propagate_signal(PrimaryTarget, Hour, InitialSignal, [PrimaryTarget]).
+
+propagate_signal(CurrentNode, CurrentHour, CurrentSignal, Visited) :-
+    cascade_edge(CurrentNode, NextNode, _Mechanism, _Params, TimeDelay),
+    \+ member(NextNode, Visited),
+    NextHour is (CurrentHour + TimeDelay) mod 24,
+    AttenuatedSignal is CurrentSignal * 0.6,
+    abs(AttenuatedSignal) > 0.05,
+    assertz(arriving_signal(CurrentNode, NextNode, NextHour, AttenuatedSignal)),
+    propagate_signal(NextNode, NextHour, AttenuatedSignal, [NextNode | Visited]).
+
+aggregate_cascades(DestNode, Hour, Tone, NetMod) :-
+    findall(Mod,
+        (
+            arriving_signal(Source, DestNode, Hour, Signal),
+            cascade_edge(Source, DestNode, Mech, Params, _),
+            calculate_mechanism_effect(Mech, Signal, Params, Tone, Mod)
+        ),
+        ModList),
+    sum_list(ModList, NetMod).
+
+sum_list([], 0).
+sum_list([H|T], Sum) :- sum_list(T, Rest), Sum is H + Rest.
+
+% ---------------------------------------------------------------------
+% 5. HIGH-LEVEL HUMAN BIOLOGICAL PROCESSES & SYSTEMS 
 % ---------------------------------------------------------------------
 
 biological_process(cardiovascular_system, 'Cardiovascular Hemodynamics & Vascular Tone', universal).
@@ -238,13 +357,31 @@ process_lambda(thyroid_hormone_axis, 8, 7.0).
 process_lambda(prolactin_mammary_priming, 3, 6.0).
 
 % ---------------------------------------------------------------------
-% 2. POISSON INTENSITY & FLAME GRAPH MAPPING
+% 6. POISSON INTENSITY, PK/PD MODULATION & ASCII FLAME GRAPH
 % ---------------------------------------------------------------------
 
-poisson_intensity(Lambda, Hour, Magnitude) :-
+base_intensity(Lambda, Hour, BaseMag) :-
     PeakDist is abs(Hour - Lambda),
     WrappedDist is min(PeakDist, 24 - PeakDist),
-    Magnitude is exp(-0.2 * WrappedDist) * Lambda.
+    BaseMag is exp(-0.2 * WrappedDist) * Lambda.
+
+% The new 4-arity poisson intensity engine that modulates baseline tone 
+% using PK curves and temporal cascade routing.
+poisson_intensity(ProcessID, Lambda, Hour, FinalMag) :-
+    base_intensity(Lambda, Hour, BaseMag),
+    
+    % Get Direct PK/PD effects
+    (active_drug_concentration(ProcessID, Hour, Conc) ->
+        molecule_target(_, Target, Mech, Params),
+        target_process(Target, ProcessID),
+        calculate_mechanism_effect(Mech, Conc, Params, BaseMag, DirectMod)
+    ;   DirectMod = 0
+    ),
+    
+    % Get Arriving Cascading Network effects
+    aggregate_cascades(ProcessID, Hour, BaseMag, CascadeMod),
+    
+    FinalMag is max(0, BaseMag + DirectMod + CascadeMod).
 
 magnitude_to_char(Mag, Char) :-
     ( Mag < 0.5 -> Char = ' '
@@ -255,10 +392,36 @@ magnitude_to_char(Mag, Char) :-
     ).
 
 % ---------------------------------------------------------------------
-% 3. SCHEDULE & FLAME GRAPH SERIALIZATION
+% 7. INPUT PROCESSOR & SCHEDULE SERIALIZATION
 % ---------------------------------------------------------------------
 
-daily_biological_pathways_schedule :-
+process_drug_input(Smiles, DoseMass, Route, AdminTime) :-
+    smiles_parse(Smiles, _Graph), 
+    (molecule_target(Smiles, Target, Mech, Params) ->
+        target_process(Target, Process),
+        forall(between(0, 23, Hour), (
+            calculate_concentration(DoseMass, Route, AdminTime, Hour, Conc),
+            assertz(active_drug_concentration(Process, Hour, Conc)),
+            
+            % Use baseline median (e.g. Lambda = 8) to calculate initial trigger threshold
+            base_intensity(8, Hour, BaseTone), 
+            calculate_mechanism_effect(Mech, Conc, Params, BaseTone, Signal), 
+            trigger_cascade(Process, Hour, Signal)
+        ))
+    ;   format('Warning: ~w not found in receptor DB.~n', [Smiles])
+    ).
+
+% Support execution via pure arity zero if called bare
+daily_biological_pathways_schedule :- 
+    daily_biological_pathways_schedule([]).
+
+% Main execution engine: Tuple structure -> (SMILES, DoseMass, AdminRoute, AdminTime)
+daily_biological_pathways_schedule(MoleculesList) :-
+    retractall(arriving_signal(_,_,_,_)),
+    retractall(active_drug_concentration(_,_,_)),
+    
+    forall(member((S, M, R, T), MoleculesList), process_drug_input(S, M, R, T)),
+
     write('====================================================================='), nl,
     write(' 24-HOUR POISSON-PARAMETERIZED HUMAN PHYSIOLOGY & FLAME GRAPH REPORT'), nl,
     write('====================================================================='), nl, nl,
@@ -273,7 +436,7 @@ daily_biological_pathways_schedule :-
             write('[ '), write(ProcSex), write(' ] '), write(ProcessName), nl,
             write('FLAME: ['),
             forall(between(0, 23, H), (
-                poisson_intensity(Lambda, H, Mag),
+                poisson_intensity(ProcessID, Lambda, H, Mag),
                 magnitude_to_char(Mag, C),
                 write(C)
             )),
@@ -281,7 +444,7 @@ daily_biological_pathways_schedule :-
             forall(
                 (
                     between(0, 23, Hour),
-                    poisson_intensity(Lambda, Hour, RawMag),
+                    poisson_intensity(ProcessID, Lambda, Hour, RawMag),
                     RawMag > 3.0,
                     format(atom(MagStr), '~2f', [RawMag]),
                     process_pathway(ProcessID, PathwayID),
