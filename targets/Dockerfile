@@ -1,12 +1,26 @@
-# docker build -t orangebook . && docker run -d -p 8080:8080 orangebook
 FROM python:3.11-slim
-RUN apt-get update && apt-get install -y --no-install-recommends curl bash ca-certificates psmisc && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends curl bash ca-certificates psmisc zstd && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Pre-cache gemma2:2b during build
+ENV OLLAMA_MODELS=/root/.ollama/models
+RUN bash -c ' \
+    export OLLAMA_MODELS=/root/.ollama/models && \
+    ollama serve & \
+    PID=$! && \
+    until curl -s http://localhost:11434/api/tags >/dev/null; do \
+        sleep 1; \
+    done && \
+    ollama pull gemma2:2b && \
+    kill $PID \
+'
+
 WORKDIR /app
 ENV DEFAULT_STACK='[{"name":"Prednisone","dose":60,"unit":"mg","route":"PO","ka":1.2,"ke":0.23,"vd":50,"kd":1.0,"hillN":1.5},{"name":"Acetaminophen","dose":1000,"unit":"mg","route":"PO","ka":2.0,"ke":0.28,"vd":45,"kd":5.0,"hillN":1.0},{"name":"Vedolizumab","dose":300,"unit":"mg","route":"IM/SC","ka":0.5,"ke":0.01,"vd":8,"kd":0.1,"hillN":1.2},{"name":"Tofacitinib","dose":5,"unit":"mg","route":"PO","ka":3.0,"ke":0.23,"vd":87,"kd":0.2,"hillN":1.2},{"name":"Nicotine","dose":100,"unit":"mg","route":"Vapor","ka":5.0,"ke":0.35,"vd":120,"kd":0.5,"hillN":1.0},{"name":"Caffeine","dose":200,"unit":"mg","route":"PO","ka":2.5,"ke":0.14,"vd":40,"kd":2.0,"hillN":1.0}]'
 RUN mkdir -p /app/public
+
 RUN cat << 'EOF' > /app/server.py
-import http.server, socketserver, json, urllib.request, os
+import http.server, socketserver, json, urllib.request, os, sys
 from urllib.parse import urlparse, parse_qs
 
 def query_ollama(prompt):
@@ -58,8 +72,14 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps({"facts" if 'facts' in self.path else "lomns": [{"drug": x['name'], "lomn": res_text} for x in d.get('drugs', [])] if 'lomns' in self.path else res_text}).encode())
         except Exception as e:
             self.send_response(500); self.end_headers(); self.wfile.write(str(e).encode())
-with socketserver.TCPServer(("", 8080), H) as s: s.serve_forever()
+
+PORT = 8080
+with socketserver.TCPServer(("", PORT), H) as s:
+    sys.stdout.write(f"[INFO] Server starting up and listening on port {PORT}...\n")
+    sys.stdout.flush()
+    s.serve_forever()
 EOF
+
 RUN cat << 'EOF' > /app/public/index.html
 <!DOCTYPE html>
 <html lang="en">
@@ -67,13 +87,14 @@ RUN cat << 'EOF' > /app/public/index.html
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Systems-Pharmacology Simulator</title>
-    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
         {
             "imports": {
-                "solid-js": "[https://esm.sh/solid-js@1.8.20](https://esm.sh/solid-js@1.8.20)",
-                "solid-js/web": "[https://esm.sh/solid-js@1.8.20/web](https://esm.sh/solid-js@1.8.20/web)",
-                "trealla": "[https://esm.sh/trealla@0.10.0](https://esm.sh/trealla@0.10.0)"
+                "solid-js": "https://esm.sh/solid-js@1.8.20",
+                "solid-js/web": "https://esm.sh/solid-js@1.8.20/web",
+                "solid-js/html": "https://esm.sh/solid-js@1.8.20/html",
+                "trealla": "https://esm.sh/trealla@0.10.0"
             }
         }
     </script>
@@ -97,6 +118,7 @@ RUN cat << 'EOF' > /app/public/index.html
         import { createSignal, onMount, For, Show } from 'solid-js';
         import { render } from 'solid-js/web';
         import { load, Prolog } from 'trealla';
+        import html from 'solid-js/html';
 
         function App() {
             const [isLoading, setIsLoading] = createSignal(true);
@@ -106,7 +128,7 @@ RUN cat << 'EOF' > /app/public/index.html
             const [stackSize, setStackSize] = createSignal(4);
             const [analysis, setAnalysis] = createSignal({ impacts: [] });
             const [lomns, setLomns] = createSignal([]);
-            
+
             let pl = null;
 
             onMount(async () => {
@@ -130,11 +152,11 @@ RUN cat << 'EOF' > /app/public/index.html
                         body: JSON.stringify({ drugs: defaultStackData })
                     });
                     const data = await res.json();
-                    
+
                     setLoadingMessage('Executing Prolog simulation...');
                     setProgress(90);
                     await runPrologAnalysis(data.facts || '');
-                    
+
                     setProgress(100);
                 } catch (e) {
                     setLoadingMessage('Initialization failed. Check console.');
@@ -152,7 +174,7 @@ RUN cat << 'EOF' > /app/public/index.html
                     const res = await fetch(`/api/random-stack?n=${stackSize()}`);
                     const newStack = await res.json();
                     setStack(newStack);
-                    
+
                     setProgress(70);
                     setLoadingMessage('Querying Gemma for new stack facts...');
                     const resFacts = await fetch('/api/generate-facts', {
@@ -161,11 +183,11 @@ RUN cat << 'EOF' > /app/public/index.html
                         body: JSON.stringify({ drugs: newStack })
                     });
                     const data = await resFacts.json();
-                    
+
                     setProgress(90);
                     setLoadingMessage('Running Prolog simulation...');
                     await runPrologAnalysis(data.facts || '');
-                    
+
                     setProgress(100);
                 } catch (e) {
                     console.error(e);
@@ -196,7 +218,7 @@ RUN cat << 'EOF' > /app/public/index.html
 
             const runPrologAnalysis = async (gemmaFacts) => {
                 if (!pl) return;
-                const stackTerms = stack().map(s => 
+                const stackTerms = stack().map(s =>
                     `drug('${s.name}', ${s.dose}, ${s.ka}, ${s.ke}, ${s.vd}, ${s.kd}, ${s.hillN})`
                 ).join(', ');
 
@@ -253,59 +275,57 @@ RUN cat << 'EOF' > /app/public/index.html
                 }
             };
 
-            return (
+            return html`
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
-                    <Show when="{isLoading()}">
+                    <${Show} when=${isLoading}>
                         <div class="absolute inset-0 bg-white/95 flex flex-col items-center justify-center z-20 rounded-xl p-6 text-center">
-                            <div class="text-sm font-semibold text-slate-800 mb-2">{loadingMessage()}</div>
+                            <div class="text-sm font-semibold text-slate-800 mb-2">${loadingMessage}</div>
                             <div class="w-64 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                <div class="h-full bg-blue-600 transition-all duration-300" style={{ width: `${prog()}%` }}></div>
+                                <div class="h-full bg-blue-600 transition-all duration-300" style=${() => ({ width: `${progress()}%` })}></div>
                             </div>
                         </div>
-                    </Show>
+                    <//>
 
-                    {/* Left Column: Active Stack Configuration */}
                     <section class="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col">
                         <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-3">Active Drug Stack</h2>
-                        
+
                         <div class="flex items-center gap-2 mb-4 flex-wrap">
-                            <input 
-                                type="number" 
-                                min="1" 
-                                max="10" 
-                                value={stackSize()} 
-                                onInput={e => setStackSize(parseInt(e.target.value) || 4)} 
-                                class="w-16 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value=${stackSize}
+                                onInput=${e => setStackSize(parseInt(e.target.value) || 4)}
+                                class="w-16 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 title="Stack Size"
                             />
-                            <button onClick={generateRandomStack} class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm">
+                            <button onClick=${generateRandomStack} class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm">
                                 Random Stack
                             </button>
-                            <button onClick={generateLomns} class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm">
+                            <button onClick=${generateLomns} class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm">
                                 Generate LOMNs
                             </button>
                         </div>
 
                         <ul class="space-y-2 overflow-y-auto max-h-72 pr-1">
-                            <For each="{stack()}">
-                                {(item) => (
+                            <${For} each=${stack}>
+                                ${(item) => html`
                                     <li class="bg-white p-3 rounded-lg border border-slate-200 flex justify-between items-center text-sm shadow-2xs">
-                                        <span class="font-semibold text-slate-800">{item.name}</span>
+                                        <span class="font-semibold text-slate-800">${item.name}</span>
                                         <span class="text-slate-500 font-mono text-xs bg-slate-100 px-2 py-1 rounded">
-                                            {item.dose}{item.unit} ({item.route})
+                                            ${item.dose}${item.unit} (${item.route})
                                         </span>
                                     </li>
-                                )}
-                            </For>
+                                `}
+                            <//>
                         </ul>
                     </section>
 
-                    {/* Right Column: Simulation Results & LOMNs */}
                     <section class="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col space-y-6">
                         <div>
                             <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Cellular Perturbation Index (CPI) Matrix</h2>
-                            <p class="text-xs text-slate-500 mb-3">Calculated via 1-compartment kinetics ($T=12\text{ h}$) & sigmoidal Hill receptor occupancy.</p>
-                            
+                            <p class="text-xs text-slate-500 mb-3">Calculated via 1-compartment kinetics (T=12 h) & sigmoidal Hill receptor occupancy.</p>
+
                             <div class="overflow-x-auto border border-slate-200 rounded-lg bg-white">
                                 <table class="w-full text-left text-xs">
                                     <thead class="bg-slate-100 border-b border-slate-200 text-slate-700 uppercase font-semibold">
@@ -317,66 +337,68 @@ RUN cat << 'EOF' > /app/public/index.html
                                         </tr>
                                     </thead>
                                     <tbody class="divide-y divide-slate-100">
-                                        <For each="{analysis().impacts}">
-                                            {(row) => (
+                                        <${For} each=${() => analysis().impacts}>
+                                            ${(row) => html`
                                                 <tr class="hover:bg-slate-50">
-                                                    <td class="p-3 font-semibold text-slate-800">{row.drug}</td>
-                                                    <td class="p-3 text-slate-600">{row.organ}</td>
-                                                    <td class="p-3 text-slate-600">{row.cell}</td>
+                                                    <td class="p-3 font-semibold text-slate-800">${row.drug}</td>
+                                                    <td class="p-3 text-slate-600">${row.organ}</td>
+                                                    <td class="p-3 text-slate-600">${row.cell}</td>
                                                     <td class="p-3">
                                                         <span class="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-mono text-[11px] font-medium">
-                                                            {row.cpi}%
+                                                            ${row.cpi}%
                                                         </span>
                                                     </td>
                                                 </tr>
-                                            )}
-                                        </For>
+                                            `}
+                                        <//>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <Show when="{lomns().length"> 0}>
+                        <${Show} when=${() => lomns().length > 0}>
                             <div>
                                 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">Letters of Medical Necessity (LOMN)</h2>
                                 <div class="space-y-3 max-h-80 overflow-y-auto pr-1">
-                                    <For each="{lomns()}">
-                                        {(lomnItem) => (
+                                    <${For} each=${lomns}>
+                                        ${(lomnItem) => html`
                                             <div class="bg-white border border-slate-300 p-4 rounded-lg shadow-2xs">
-                                                <h3 class="font-bold text-sm text-slate-800 mb-1">{lomnItem.drug}</h3>
-                                                <pre class="whitespace-pre-wrap text-xs bg-slate-50 p-3 rounded-md border border-slate-100 text-slate-700 font-sans leading-relaxed">
-                                                    {lomnItem.lomn}
-                                                </pre>
+                                                <h3 class="font-bold text-sm text-slate-800 mb-1">${lomnItem.drug}</h3>
+                                                <pre class="whitespace-pre-wrap text-xs bg-slate-50 p-3 rounded-md border border-slate-100 text-slate-700 font-sans leading-relaxed">${lomnItem.lomn}</pre>
                                             </div>
-                                        )}
-                                    </For>
+                                        `}
+                                    <//>
                                 </div>
                             </div>
-                        </Show>
+                        <//>
                     </section>
                 </div>
-            );
+            `;
         }
 
-        render(() => <App/>, document.getElementById('app'));
+        render(() => html`<${App}/>`, document.getElementById('app'));
     </script>
 </body>
 </html>
 EOF
+
 RUN cat << 'EOF' > /app/entrypoint.sh
 #!/bin/bash
 export OLLAMA_ORIGINS="*"
-mkdir -p /root/.ollama
+export OLLAMA_MODELS=/root/.ollama/models
+echo "[INFO] Starting Ollama server..."
 ollama serve > /app/ollama.log 2>&1 &
 PID=$!
-for i in {1..60}; do
+for i in {1..30}; do
     curl -s http://localhost:11434/api/tags >/dev/null && break
-    sleep 5
+    sleep 2
     kill -0 $PID 2>/dev/null || { cat /app/ollama.log; exit 1; }
 done
-ollama pull gemma2:2b
+echo "[INFO] Ollama server is up and running."
+echo "[INFO] Starting Python HTTP server..."
 exec python3 /app/server.py
 EOF
+
 RUN chmod +x /app/entrypoint.sh
 EXPOSE 8080
 ENTRYPOINT ["/app/entrypoint.sh"]
