@@ -17,15 +17,45 @@ RUN bash -c ' \
 
 WORKDIR /app
 ENV DEFAULT_STACK='[{"name":"Prednisone","dose":60,"unit":"mg","route":"PO","ka":1.2,"ke":0.23,"vd":50,"kd":1.0,"hillN":1.5},{"name":"Acetaminophen","dose":1000,"unit":"mg","route":"PO","ka":2.0,"ke":0.28,"vd":45,"kd":5.0,"hillN":1.0},{"name":"Vedolizumab","dose":300,"unit":"mg","route":"IM/SC","ka":0.5,"ke":0.01,"vd":8,"kd":0.1,"hillN":1.2},{"name":"Tofacitinib","dose":5,"unit":"mg","route":"PO","ka":3.0,"ke":0.23,"vd":87,"kd":0.2,"hillN":1.2},{"name":"Nicotine","dose":100,"unit":"mg","route":"Vapor","ka":5.0,"ke":0.35,"vd":120,"kd":0.5,"hillN":1.0},{"name":"Caffeine","dose":200,"unit":"mg","route":"PO","ka":2.5,"ke":0.14,"vd":40,"kd":2.0,"hillN":1.0}]'
-RUN mkdir -p /app/public
+# PASSIVE_PREWARM=true (the default) runs a low-priority background thread
+# inside server.py that passively walks the ENTIRE Orange Book (~2,000+
+# molecules) through Gemma, one at a time, and caches every result to
+# /app/data -- so drugs get their facts filled in over time without anyone
+# asking, and a stack built from already-cached molecules never touches
+# Gemma at request time. PASSIVE_PREWARM_DELAY_MS throttles how fast it goes
+# so it doesn't starve interactive requests hitting the same local Ollama.
+ENV PASSIVE_PREWARM=true
+ENV PASSIVE_PREWARM_DELAY_MS=250
+RUN mkdir -p /app/public /app/data
+# /app/data holds the Orange Book molecule list and the per-molecule facts
+# cache. Declared as a volume so `docker run -v obdata:/app/data ...` (or any
+# bind mount at this path) persists both across container recreations --
+# without a mount, Docker still keeps the data in an anonymous volume that
+# survives restarts of the same container, but not `docker rm`.
+VOLUME ["/app/data"]
 
+# ---------------------------------------------------------------------------
+# server.py
+# ---------------------------------------------------------------------------
 RUN cat << 'EOF' > /app/server.py
-import http.server, socketserver, json, urllib.request, os, sys
+import http.server, socketserver, json, urllib.request, urllib.error, os, sys, time, threading, re
 from urllib.parse import urlparse, parse_qs
 
-def query_ollama(prompt):
-    req = urllib.request.Request("http://localhost:11434/api/generate", data=json.dumps({"model": "gemma2:2b", "prompt": prompt, "stream": False}).encode(), headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req) as r:
+DATA_DIR = "/app/data"
+os.makedirs(DATA_DIR, exist_ok=True)
+MOLECULES_CACHE_PATH = os.path.join(DATA_DIR, "orange_book_molecules.json")
+FACTS_CACHE_PATH = os.path.join(DATA_DIR, "facts_cache.jsonl")
+
+_facts_lock = threading.Lock()
+_molecules_lock = threading.Lock()
+
+def query_ollama(prompt, timeout=120):
+    req = urllib.request.Request(
+        "http://localhost:11434/api/generate",
+        data=json.dumps({"model": "gemma2:2b", "prompt": prompt, "stream": False}).encode(),
+        headers={'Content-Type': 'application/json'}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode()).get('response', '')
 
 def clean_json(text):
@@ -35,13 +65,164 @@ def clean_json(text):
     if text.endswith("```"): text = text[:-3]
     return text.strip()
 
+# ---------------- Orange Book ingestion (openFDA JSON, not the raw ~-delimited zip) ----------------
+
+def fetch_orange_book_molecules(page_size=1000, max_pages=500):
+    """Walk every Orange Book record via openFDA's search_after cursor and
+    collect every unique active-ingredient name.
+
+    openFDA hard-caps skip/limit pagination at 26,000 total records
+    (skip<=25000, limit<=1000) -- past that it returns 400 no matter what, and
+    the Orange Book's underlying product-strength records exceed that count.
+    The documented way past this ceiling is to follow the "next" URL openFDA
+    returns in the response's Link header (a search_after cursor), which has
+    no such limit. See https://open.fda.gov/apis/paging/.
+
+    Runs at container startup on a background thread, NOT at image build time.
+    """
+    seen = set()
+    url = f"https://api.fda.gov/drug/orangebook.json?limit={page_size}"
+    for _ in range(max_pages):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'systems-pharm-sim/1.0'})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                payload = json.loads(r.read().decode())
+                link_header = r.headers.get('Link')
+        except urllib.error.HTTPError as e:
+            print(f"[WARN] Orange Book fetch failed: {e}", flush=True)
+            break
+        except Exception as e:
+            print(f"[WARN] Orange Book fetch error: {e}", flush=True)
+            break
+
+        results = payload.get('results', [])
+        for rec in results:
+            for prod in rec.get('products', []):
+                for ai in prod.get('active_ingredients', []):
+                    name = (ai.get('name') or '').strip()
+                    if name:
+                        seen.add(name.upper())
+
+        if not results:
+            break
+
+        m = re.search(r'<([^>]+)>;\s*rel="next"', link_header or '')
+        if not m:
+            break  # no Link header -> that was the last page
+        url = m.group(1)
+        time.sleep(0.25)  # be polite to the public API
+
+    return sorted(seen)
+
+def load_or_fetch_molecules():
+    with _molecules_lock:
+        if os.path.exists(MOLECULES_CACHE_PATH):
+            try:
+                with open(MOLECULES_CACHE_PATH) as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        print("[INFO] Fetching full Orange Book ingredient list from openFDA...", flush=True)
+        molecules = fetch_orange_book_molecules()
+        print(f"[INFO] Retrieved {len(molecules)} unique Orange Book molecules.", flush=True)
+        try:
+            with open(MOLECULES_CACHE_PATH, 'w') as f:
+                json.dump(molecules, f)
+        except Exception as e:
+            print(f"[WARN] Could not persist molecule cache: {e}", flush=True)
+        return molecules
+
+MOLECULES = []  # populated by a background thread after the server starts
+
+# ---------------- Per-molecule Trealla facts cache (append-only JSONL, resumable) ----------------
+
+def load_facts_cache():
+    cache = {}
+    if os.path.exists(FACTS_CACHE_PATH):
+        with open(FACTS_CACHE_PATH) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    cache[obj['molecule']] = obj['facts']
+                except Exception:
+                    continue  # tolerate a truncated last line from an interrupted run
+    return cache
+
+FACTS_CACHE = load_facts_cache()
+
+def append_fact(molecule, facts_text):
+    with _facts_lock:
+        FACTS_CACHE[molecule] = facts_text
+        with open(FACTS_CACHE_PATH, 'a') as f:
+            f.write(json.dumps({"molecule": molecule, "facts": facts_text}) + "\n")
+
+def generate_facts_for(name):
+    key = name.upper()
+    if key in FACTS_CACHE:
+        return FACTS_CACHE[key]
+    prompt = (
+        f"Generate valid Trealla Prolog facts for the drug '{name}'. "
+        "Format: molecule_target('SMILES', Target, Mech, [Params]). "
+        "target_process(Target, Sys). process_pathway(Sys, Path). Code only, no markdown."
+    )
+    raw = query_ollama(prompt)
+    append_fact(key, raw)
+    return raw
+
+# ---------------- Passive background prewarm ----------------
+# Walks the full Orange Book list and fills in any missing facts, one
+# molecule at a time, so the cache fills in on its own over time instead of
+# generating on the fly when a stack happens to need an uncached molecule.
+# Already-cached molecules cost nothing here (no Gemma call, no sleep), so on
+# a warm /app/data volume this finishes near-instantly and the badge just
+# reports "done" -- no work is redone.
+
+PASSIVE_PREWARM_ENABLED = os.environ.get('PASSIVE_PREWARM', 'true').lower() == 'true'
+PASSIVE_PREWARM_DELAY_S = float(os.environ.get('PASSIVE_PREWARM_DELAY_MS', '250')) / 1000.0
+
+_prewarm_status_lock = threading.Lock()
+prewarm_status = {"total": 0, "done": 0, "running": False, "current": None}
+
+def passive_prewarm_loop():
+    while not MOLECULES:  # wait for the Orange Book list to finish loading
+        time.sleep(1)
+
+    with _prewarm_status_lock:
+        prewarm_status["total"] = len(MOLECULES)
+        prewarm_status["running"] = True
+
+    for name in MOLECULES:
+        key = name.upper()
+        if key not in FACTS_CACHE:
+            with _prewarm_status_lock:
+                prewarm_status["current"] = name
+            try:
+                generate_facts_for(name)
+            except Exception as e:
+                print(f"[WARN] passive prewarm failed for {name}: {e}", flush=True)
+            time.sleep(PASSIVE_PREWARM_DELAY_S)
+        with _prewarm_status_lock:
+            prewarm_status["done"] += 1
+
+    with _prewarm_status_lock:
+        prewarm_status["running"] = False
+        prewarm_status["current"] = None
+    print(f"[INFO] Passive Orange Book prewarm complete: {len(FACTS_CACHE)} molecules cached.", flush=True)
+
+# ---------------- HTTP handler ----------------
+
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *a, **kw): super().__init__(*a, directory="/app/public", **kw)
+
     def do_GET(self):
         p = urlparse(self.path)
         if p.path == '/api/default-stack':
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
             self.wfile.write(os.environ.get('DEFAULT_STACK', '[]').encode())
+
         elif p.path == '/api/random-stack':
             n = int(parse_qs(p.query).get('n', [4])[0])
             prompt = f"Generate a JSON array of exactly {n} random pharmacological drugs. Each object must have keys: name (string), dose (number), unit (string), route (string), ka (number), ke (number), vd (number), kd (number), hillN (number). Return ONLY raw valid JSON array, no markdown."
@@ -56,30 +237,176 @@ class H(http.server.SimpleHTTPRequestHandler):
                 except Exception:
                     prompt = f"The previous output was invalid JSON. Fix it and return ONLY a valid JSON array of {n} drug objects with keys: name, dose, unit, route, ka, ke, vd, kd, hillN."
             self.send_response(500); self.end_headers(); self.wfile.write(b"[]")
-        else: super().do_GET()
+
+        elif p.path == '/api/molecules':
+            q = parse_qs(p.query).get('q', [''])[0].strip().upper()
+            pool = MOLECULES if MOLECULES else []
+            matches = [m for m in pool if q in m][:50] if q else pool[:50]
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
+            self.wfile.write(json.dumps({"total": len(pool), "results": matches}).encode())
+
+        elif p.path == '/api/molecules-status':
+            with _prewarm_status_lock:
+                prewarm_snapshot = dict(prewarm_status)
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
+            self.wfile.write(json.dumps({
+                "loaded": len(MOLECULES),
+                "facts_cached": len(FACTS_CACHE),
+                "prewarm": prewarm_snapshot
+            }).encode())
+
+        else:
+            super().do_GET()
+
     def do_POST(self):
         cl = int(self.headers.get('Content-Length', 0))
         d = json.loads(self.rfile.read(cl).decode())
+
         if self.path == '/api/generate-facts':
             names = [x['name'] for x in d.get('drugs', [])]
-            prompt = f"Generate valid Trealla Prolog facts for stack: {names}. Format: molecule_target('SMILES', Target, Mech, [Params]). target_process(Target, Sys). process_pathway(Sys, Path). Code only."
-        else:
-            prompt = "".join([f"Write a formal LOMN for {x['name']} ({x['dose']}{x['unit']}, {x['route']}) with coverage criteria and lab placeholders.\n" for x in d.get('drugs', [])])
-        
-        try:
-            res_text = query_ollama(prompt)
+            parts = []
+            for name in names:
+                try:
+                    parts.append(generate_facts_for(name))
+                except Exception as e:
+                    parts.append(f"% generation failed for {name}: {e}")
             self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
-            self.wfile.write(json.dumps({"facts" if 'facts' in self.path else "lomns": [{"drug": x['name'], "lomn": res_text} for x in d.get('drugs', [])] if 'lomns' in self.path else res_text}).encode())
-        except Exception as e:
-            self.send_response(500); self.end_headers(); self.wfile.write(str(e).encode())
+            self.wfile.write(json.dumps({"facts": "\n".join(parts)}).encode())
+
+        elif self.path == '/api/generate-lomns':
+            lomns = []
+            for x in d.get('drugs', []):
+                prompt = f"Write a formal LOMN for {x['name']} ({x['dose']}{x['unit']}, {x['route']}) with coverage criteria and lab placeholders."
+                try:
+                    text = query_ollama(prompt)
+                except Exception as e:
+                    text = f"Generation failed: {e}"
+                lomns.append({"drug": x['name'], "lomn": text})
+            self.send_response(200); self.send_header('Content-Type', 'application/json'); self.end_headers()
+            self.wfile.write(json.dumps({"lomns": lomns}).encode())
+
+        else:
+            self.send_response(404); self.end_headers()
+
+def start_molecule_loader():
+    global MOLECULES
+    MOLECULES = load_or_fetch_molecules()
 
 PORT = 8080
+threading.Thread(target=start_molecule_loader, daemon=True).start()
+if PASSIVE_PREWARM_ENABLED:
+    threading.Thread(target=passive_prewarm_loop, daemon=True).start()
+else:
+    print("[INFO] PASSIVE_PREWARM=false: facts will only be generated on demand.", flush=True)
 with socketserver.TCPServer(("", PORT), H) as s:
     sys.stdout.write(f"[INFO] Server starting up and listening on port {PORT}...\n")
     sys.stdout.flush()
     s.serve_forever()
 EOF
 
+# ---------------------------------------------------------------------------
+# prewarm_facts.py -- optional manual fallback, never run during `docker build`
+# ---------------------------------------------------------------------------
+RUN cat << 'EOF' > /app/prewarm_facts.py
+#!/usr/bin/env python3
+"""
+Bulk-generates Trealla Prolog facts for every molecule in the FDA Orange Book
+via the local Ollama gemma2:2b instance, appending to the same JSONL cache
+server.py reads from.
+
+server.py already does this passively in the background by default
+(PASSIVE_PREWARM=true), so you normally don't need this script at all. It
+exists for the PASSIVE_PREWARM=false case, or if you want to run the fill-in
+as its own foreground process outside the server:
+
+    docker exec -it <container> python3 /app/prewarm_facts.py
+
+This intentionally does NOT run during `docker build`: ~2,000+ molecules at a
+few seconds per LLM call is hours of work, and a build step that long (and
+non-resumable if interrupted) is the wrong place for it.
+
+It is resumable: any molecule already present in the JSONL cache is skipped,
+so killing and re-running the script just continues where it left off, and
+runs it alongside the passive loop safely (both just append newly-generated
+molecules; whichever gets to a given molecule first "wins" and the other
+skips it).
+"""
+import json, os, sys, time, urllib.request
+
+DATA_DIR = "/app/data"
+FACTS_CACHE_PATH = os.path.join(DATA_DIR, "facts_cache.jsonl")
+MOLECULES_CACHE_PATH = os.path.join(DATA_DIR, "orange_book_molecules.json")
+
+def query_ollama(prompt, timeout=120):
+    req = urllib.request.Request(
+        "http://localhost:11434/api/generate",
+        data=json.dumps({"model": "gemma2:2b", "prompt": prompt, "stream": False}).encode(),
+        headers={'Content-Type': 'application/json'}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode()).get('response', '')
+
+def load_done():
+    done = set()
+    if os.path.exists(FACTS_CACHE_PATH):
+        with open(FACTS_CACHE_PATH) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    done.add(json.loads(line)['molecule'])
+                except Exception:
+                    continue
+    return done
+
+def wait_for_molecule_list(max_wait_s=300):
+    waited = 0
+    while not os.path.exists(MOLECULES_CACHE_PATH) and waited < max_wait_s:
+        print("[INFO] Waiting for the server's Orange Book fetch to finish...", flush=True)
+        time.sleep(5)
+        waited += 5
+    return os.path.exists(MOLECULES_CACHE_PATH)
+
+def main():
+    if not wait_for_molecule_list():
+        print("[ERROR] Molecule cache never appeared (check the server's Orange "
+              "Book fetch / network access). Aborting.", file=sys.stderr)
+        sys.exit(1)
+
+    with open(MOLECULES_CACHE_PATH) as f:
+        molecules = json.load(f)
+
+    done = load_done()
+    todo = [m for m in molecules if m not in done]
+    print(f"[INFO] {len(done)} already cached, {len(todo)} remaining out of {len(molecules)} total.", flush=True)
+
+    for i, name in enumerate(todo, 1):
+        prompt = (
+            f"Generate valid Trealla Prolog facts for the drug '{name}'. "
+            "Format: molecule_target('SMILES', Target, Mech, [Params]). "
+            "target_process(Target, Sys). process_pathway(Sys, Path). Code only, no markdown."
+        )
+        try:
+            facts = query_ollama(prompt)
+        except Exception as e:
+            print(f"[WARN] ({i}/{len(todo)}) failed for {name}: {e}", flush=True)
+            continue
+        with open(FACTS_CACHE_PATH, 'a') as f:
+            f.write(json.dumps({"molecule": name, "facts": facts}) + "\n")
+        if i % 25 == 0:
+            print(f"[INFO] {i}/{len(todo)} done...", flush=True)
+        time.sleep(0.1)
+
+    print("[INFO] Prewarm complete.", flush=True)
+
+if __name__ == "__main__":
+    main()
+EOF
+
+# ---------------------------------------------------------------------------
+# public/index.html
+# ---------------------------------------------------------------------------
 RUN cat << 'EOF' > /app/public/index.html
 <!DOCTYPE html>
 <html lang="en">
@@ -107,7 +434,7 @@ RUN cat << 'EOF' > /app/public/index.html
                 Client-side Trealla WASM engine evaluating multi-drug pharmacokinetics, Hill receptor occupancy, and Cellular Perturbation Indices (CPI).
             </p>
             <div class="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-lg text-xs leading-relaxed">
-                <strong>Disclaimer:</strong> Stack parameters and pharmacological properties are dynamically synthesized via Gemma 2b via local Ollama inference.
+                <strong>Disclaimer:</strong> Stack parameters and pharmacological properties are dynamically synthesized via Gemma 2b via local Ollama inference. Molecule names come from the real FDA Orange Book; PK parameters attached to a manually added molecule are generic placeholders, not looked-up values.
             </div>
         </header>
 
@@ -115,7 +442,7 @@ RUN cat << 'EOF' > /app/public/index.html
     </main>
 
     <script type="module">
-        import { createSignal, onMount, For, Show } from 'solid-js';
+        import { createSignal, onMount, onCleanup, For, Show } from 'solid-js';
         import { render } from 'solid-js/web';
         import { load, Prolog } from 'trealla';
         import html from 'solid-js/html';
@@ -128,6 +455,33 @@ RUN cat << 'EOF' > /app/public/index.html
             const [stackSize, setStackSize] = createSignal(4);
             const [analysis, setAnalysis] = createSignal({ impacts: [] });
             const [lomns, setLomns] = createSignal([]);
+
+            const [molQuery, setMolQuery] = createSignal('');
+            const [molResults, setMolResults] = createSignal([]);
+            const [molTotal, setMolTotal] = createSignal(0);
+            let molDebounce;
+
+            // Passive Orange Book prewarm progress, polled from the server --
+            // that background fill-in keeps running regardless of this tab.
+            const [prewarmDone, setPrewarmDone] = createSignal(0);
+            const [prewarmTotal, setPrewarmTotal] = createSignal(0);
+            const [prewarmRunning, setPrewarmRunning] = createSignal(false);
+
+            onMount(() => {
+                const pollStatus = async () => {
+                    try {
+                        const res = await fetch('/api/molecules-status');
+                        const data = await res.json();
+                        setMolTotal(data.loaded || 0);
+                        setPrewarmDone(data.prewarm?.done || 0);
+                        setPrewarmTotal(data.prewarm?.total || 0);
+                        setPrewarmRunning(!!data.prewarm?.running);
+                    } catch (e) { /* transient -- keep last known values */ }
+                };
+                pollStatus();
+                const interval = setInterval(pollStatus, 4000);
+                onCleanup(() => clearInterval(interval));
+            });
 
             let pl = null;
 
@@ -216,6 +570,26 @@ RUN cat << 'EOF' > /app/public/index.html
                 }
             };
 
+            const searchMolecules = (q) => {
+                setMolQuery(q);
+                clearTimeout(molDebounce);
+                molDebounce = setTimeout(async () => {
+                    try {
+                        const res = await fetch(`/api/molecules?q=${encodeURIComponent(q)}`);
+                        const data = await res.json();
+                        setMolResults(data.results || []);
+                        setMolTotal(data.total || 0);
+                    } catch (e) { console.error(e); }
+                }, 250);
+            };
+
+            const addMolecule = (name) => {
+                setStack([...stack(), {
+                    name, dose: 0, unit: 'mg', route: 'PO',
+                    ka: 1.5, ke: 0.2, vd: 50, kd: 1.0, hillN: 1.0
+                }]);
+            };
+
             const runPrologAnalysis = async (gemmaFacts) => {
                 if (!pl) return;
                 const stackTerms = stack().map(s =>
@@ -277,6 +651,24 @@ RUN cat << 'EOF' > /app/public/index.html
 
             return html`
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
+                    <div class="lg:col-span-2 flex justify-end">
+                        <div class="inline-flex items-center gap-2 text-xs font-medium bg-slate-100 border border-slate-200 rounded-full px-3 py-1 text-slate-700">
+                            <span
+                                class=${() => `w-2 h-2 rounded-full ${
+                                    prewarmTotal() === 0 ? 'bg-slate-400 animate-pulse'
+                                    : prewarmRunning() ? 'bg-blue-500 animate-pulse'
+                                    : 'bg-emerald-500'
+                                }`}
+                            ></span>
+                            <${Show}
+                                when=${() => prewarmTotal() > 0}
+                                fallback=${html`<span>Loading Orange Book...</span>`}
+                            >
+                                <span>Orange Book facts: ${prewarmDone}/${prewarmTotal}${() => prewarmRunning() ? ' (filling in...)' : ' cached'}</span>
+                            <//>
+                        </div>
+                    </div>
+
                     <${Show} when=${isLoading}>
                         <div class="absolute inset-0 bg-white/95 flex flex-col items-center justify-center z-20 rounded-xl p-6 text-center">
                             <div class="text-sm font-semibold text-slate-800 mb-2">${loadingMessage}</div>
@@ -305,6 +697,31 @@ RUN cat << 'EOF' > /app/public/index.html
                             <button onClick=${generateLomns} class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-medium rounded-lg transition-colors shadow-sm">
                                 Generate LOMNs
                             </button>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="text-xs font-semibold text-slate-600 block mb-1">
+                                Add from FDA Orange Book (${molTotal} molecules loaded)
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="Search e.g. metformin"
+                                value=${molQuery}
+                                onInput=${e => searchMolecules(e.target.value)}
+                                class="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <${Show} when=${() => molResults().length > 0}>
+                                <ul class="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-40 overflow-y-auto bg-white">
+                                    <${For} each=${molResults}>
+                                        ${(m) => html`
+                                            <li class="flex justify-between items-center px-3 py-1.5 text-xs">
+                                                <span>${m}</span>
+                                                <button onClick=${() => addMolecule(m)} class="text-blue-600 hover:text-blue-800 font-semibold">Add</button>
+                                            </li>
+                                        `}
+                                    <//>
+                                </ul>
+                            <//>
                         </div>
 
                         <ul class="space-y-2 overflow-y-auto max-h-72 pr-1">
@@ -382,10 +799,14 @@ RUN cat << 'EOF' > /app/public/index.html
 </html>
 EOF
 
+# ---------------------------------------------------------------------------
+# entrypoint.sh
+# ---------------------------------------------------------------------------
 RUN cat << 'EOF' > /app/entrypoint.sh
 #!/bin/bash
 export OLLAMA_ORIGINS="*"
 export OLLAMA_MODELS=/root/.ollama/models
+mkdir -p /app/data
 echo "[INFO] Starting Ollama server..."
 ollama serve > /app/ollama.log 2>&1 &
 PID=$!
@@ -395,7 +816,7 @@ for i in {1..30}; do
     kill -0 $PID 2>/dev/null || { cat /app/ollama.log; exit 1; }
 done
 echo "[INFO] Ollama server is up and running."
-echo "[INFO] Starting Python HTTP server..."
+echo "[INFO] Starting Python HTTP server (passive Orange Book prewarm: ${PASSIVE_PREWARM})..."
 exec python3 /app/server.py
 EOF
 
