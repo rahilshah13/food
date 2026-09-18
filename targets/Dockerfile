@@ -2,7 +2,7 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y --no-install-recommends curl bash ca-certificates psmisc zstd && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://ollama.com/install.sh | sh
 
-# Pre-cache gemma2:2b during build
+# cache gemma2:2b during build
 ENV OLLAMA_MODELS=/root/.ollama/models
 RUN bash -c ' \
     export OLLAMA_MODELS=/root/.ollama/models && \
@@ -17,26 +17,11 @@ RUN bash -c ' \
 
 WORKDIR /app
 ENV DEFAULT_STACK='[{"name":"Prednisone","dose":60,"unit":"mg","route":"PO","ka":1.2,"ke":0.23,"vd":50,"kd":1.0,"hillN":1.5},{"name":"Acetaminophen","dose":1000,"unit":"mg","route":"PO","ka":2.0,"ke":0.28,"vd":45,"kd":5.0,"hillN":1.0},{"name":"Vedolizumab","dose":300,"unit":"mg","route":"IM/SC","ka":0.5,"ke":0.01,"vd":8,"kd":0.1,"hillN":1.2},{"name":"Tofacitinib","dose":5,"unit":"mg","route":"PO","ka":3.0,"ke":0.23,"vd":87,"kd":0.2,"hillN":1.2},{"name":"Nicotine","dose":100,"unit":"mg","route":"Vapor","ka":5.0,"ke":0.35,"vd":120,"kd":0.5,"hillN":1.0},{"name":"Caffeine","dose":200,"unit":"mg","route":"PO","ka":2.5,"ke":0.14,"vd":40,"kd":2.0,"hillN":1.0}]'
-# PASSIVE_PREWARM=true (the default) runs a low-priority background thread
-# inside server.py that passively walks the ENTIRE Orange Book (~2,000+
-# molecules) through Gemma, one at a time, and caches every result to
-# /app/data -- so drugs get their facts filled in over time without anyone
-# asking, and a stack built from already-cached molecules never touches
-# Gemma at request time. PASSIVE_PREWARM_DELAY_MS throttles how fast it goes
-# so it doesn't starve interactive requests hitting the same local Ollama.
 ENV PASSIVE_PREWARM=true
 ENV PASSIVE_PREWARM_DELAY_MS=250
 RUN mkdir -p /app/public /app/data
-# /app/data holds the Orange Book molecule list and the per-molecule facts
-# cache. Declared as a volume so `docker run -v obdata:/app/data ...` (or any
-# bind mount at this path) persists both across container recreations --
-# without a mount, Docker still keeps the data in an anonymous volume that
-# survives restarts of the same container, but not `docker rm`.
 VOLUME ["/app/data"]
 
-# ---------------------------------------------------------------------------
-# server.py
-# ---------------------------------------------------------------------------
 RUN cat << 'EOF' > /app/server.py
 import http.server, socketserver, json, urllib.request, urllib.error, os, sys, time, threading, re
 from urllib.parse import urlparse, parse_qs
@@ -134,7 +119,6 @@ def load_or_fetch_molecules():
 
 MOLECULES = []  # populated by a background thread after the server starts
 
-# ---------------- Per-molecule Trealla facts cache (append-only JSONL, resumable) ----------------
 
 def load_facts_cache():
     cache = {}
@@ -172,13 +156,6 @@ def generate_facts_for(name):
     append_fact(key, raw)
     return raw
 
-# ---------------- Passive background prewarm ----------------
-# Walks the full Orange Book list and fills in any missing facts, one
-# molecule at a time, so the cache fills in on its own over time instead of
-# generating on the fly when a stack happens to need an uncached molecule.
-# Already-cached molecules cost nothing here (no Gemma call, no sleep), so on
-# a warm /app/data volume this finishes near-instantly and the badge just
-# reports "done" -- no work is redone.
 
 PASSIVE_PREWARM_ENABLED = os.environ.get('PASSIVE_PREWARM', 'true').lower() == 'true'
 PASSIVE_PREWARM_DELAY_S = float(os.environ.get('PASSIVE_PREWARM_DELAY_MS', '250')) / 1000.0
@@ -304,33 +281,9 @@ with socketserver.TCPServer(("", PORT), H) as s:
     s.serve_forever()
 EOF
 
-# ---------------------------------------------------------------------------
-# prewarm_facts.py -- optional manual fallback, never run during `docker build`
-# ---------------------------------------------------------------------------
+
 RUN cat << 'EOF' > /app/prewarm_facts.py
 #!/usr/bin/env python3
-"""
-Bulk-generates Trealla Prolog facts for every molecule in the FDA Orange Book
-via the local Ollama gemma2:2b instance, appending to the same JSONL cache
-server.py reads from.
-
-server.py already does this passively in the background by default
-(PASSIVE_PREWARM=true), so you normally don't need this script at all. It
-exists for the PASSIVE_PREWARM=false case, or if you want to run the fill-in
-as its own foreground process outside the server:
-
-    docker exec -it <container> python3 /app/prewarm_facts.py
-
-This intentionally does NOT run during `docker build`: ~2,000+ molecules at a
-few seconds per LLM call is hours of work, and a build step that long (and
-non-resumable if interrupted) is the wrong place for it.
-
-It is resumable: any molecule already present in the JSONL cache is skipped,
-so killing and re-running the script just continues where it left off, and
-runs it alongside the passive loop safely (both just append newly-generated
-molecules; whichever gets to a given molecule first "wins" and the other
-skips it).
-"""
 import json, os, sys, time, urllib.request
 
 DATA_DIR = "/app/data"
@@ -404,9 +357,7 @@ if __name__ == "__main__":
     main()
 EOF
 
-# ---------------------------------------------------------------------------
-# public/index.html
-# ---------------------------------------------------------------------------
+
 RUN cat << 'EOF' > /app/public/index.html
 <!DOCTYPE html>
 <html lang="en">
@@ -799,9 +750,6 @@ RUN cat << 'EOF' > /app/public/index.html
 </html>
 EOF
 
-# ---------------------------------------------------------------------------
-# entrypoint.sh
-# ---------------------------------------------------------------------------
 RUN cat << 'EOF' > /app/entrypoint.sh
 #!/bin/bash
 export OLLAMA_ORIGINS="*"
