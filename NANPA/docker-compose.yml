@@ -1,0 +1,32 @@
+# docker compose up --build
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: inline
+      inline: |
+        FROM python:3.11-alpine
+        RUN apk add --no-cache curl bash build-base
+        WORKDIR /app
+        RUN pip install --no-cache-dir fastapi==0.111.0 uvicorn==0.29.0 pydantic==2.7.1 requests==2.31.0
+        COPY main.py .
+        EXPOSE 8000
+        CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  ollama_data:
