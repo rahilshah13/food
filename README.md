@@ -46,21 +46,6 @@
 - Calculates the nutrient surplus required for a male (`m`) to reach 80kg over 20 years, identifies the FDA complaint dietary intake to support that growth, and writes the plan to `human_growth.txt`.
 - Gemini estimates the cost of the 20 year meal plan to be under $2000 USD
 
- **predicates**
-* `write_human_report(+Gender, +TargetMass, +Days, +FileName)`: entry point
-* `solve_growth(+TargetMass, +Days, -DailyNeeds)`: Maps biomass requirements to nutrient targets
-* `calculate_expenditure(+Mass, +Days, -TDEE)`: Computes metabolic baseline and tissue synthesis costs
-* `match_nutrients(+DailyNeeds, +FoodDB, -OptimalMeal)`: Selects foods to meet requirements
-* `print_metabolic_breakdown(+Stream, +Mass, +TotalProtein)`: Calculates organ-specific protein needs.
-* `summarize_and_print(+Stream, +Meal)`: Aggregates data for the report
-* `print_summary(+Stream, +Summary)`
-* `truncate_str(+Input, +Len, -Output)`
-
-**facts**
-* `organ(+Gender, +ID, +Name, +Composition, +MassPct)`: Anatomical definitions
-* `cell(+Gender, +Name, +Size, +Turnover, +NutrientRatio)`: Metabolic cost per cell type
-* `food_data(+ID, +Name, +NutrientList)`: Nutritional inventory
-
 ---
 ### `materials.pl`
 ```
