@@ -1,5 +1,5 @@
 const express = require("express");
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
@@ -15,7 +15,9 @@ app.use(express.static(path.join(__dirname, "server/public")));
 // Load ingredients CSV for lookup
 app.get("/api/ingredients", (req, res) => {
   const results = [];
-  fs.createReadStream(path.join(__dirname, "ingredients.csv"))
+  const csvPath = path.join(__dirname, "ingredients.csv");
+  if (!fs.existsSync(csvPath)) return res.json([]);
+  fs.createReadStream(csvPath)
     .pipe(csv())
     .on("data", (data) => {
       const cas = data.cas || data.CAS || Object.values(data)[0];
@@ -25,13 +27,110 @@ app.get("/api/ingredients", (req, res) => {
     .on("end", () => res.json(results));
 });
 
+// --- MEAL PLAN POST ENDPOINT ---
+app.post("/api/meal-plan", (req, res) => {
+  const { gender = 'm', mass = 80, days = 7305 } = req.body;
+  const filename = `human_growth_${Date.now()}.txt`;
+  const filepath = path.join(__dirname, filename);
+
+  const tplArgs = [
+    path.join(__dirname, 'food.pl'),
+    path.join(__dirname, 'grow.pl'),
+    path.join(__dirname, 'human.pl'),
+    '-g', `write_human_report('${gender}', ${mass}, ${days}, '${filepath}'), halt.`
+  ];
+
+  const tplProcess = spawn('tpl', tplArgs);
+  let stderrData = '';
+
+  tplProcess.stderr.on('data', (data) => {
+    stderrData += data.toString();
+  });
+
+  tplProcess.on('close', (code) => {
+    if (code === 0 && fs.existsSync(filepath)) {
+      const reportContent = fs.readFileSync(filepath, 'utf8');
+      try { fs.unlinkSync(filepath); } catch(e) {}
+      res.json({ success: true, report: reportContent });
+    } else {
+      res.status(500).json({ success: false, error: stderrData || `TPL execution failed with code ${code}` });
+    }
+  });
+});
+
+// --- RANDOM STACK STREAMING ENDPOINT ---
+app.get("/api/random-stack-stream", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const n = parseInt(req.query.n) || 4;
+  const sendSSE = (progress, status, stack = null, error = null) => {
+    res.write(`data: ${JSON.stringify({ progress, status, stack, error })}\n\n`);
+  };
+
+  sendSSE(25, "Scanning targets knowledge base...");
+
+  setTimeout(() => {
+    sendSSE(65, "Parsing druggable targets & binding coefficients...");
+    
+    try {
+      let availableDrugs = [];
+      const targetsPath = path.join(__dirname, "targets.pl");
+      
+      if (fs.existsSync(targetsPath)) {
+        const lines = fs.readFileSync(targetsPath, 'utf8').split('\n');
+        for (const line of lines) {
+          if (line.includes('druggable_target')) {
+            const match = line.match(/druggable_target\(([^,\s]+),\s*'([^']+)'/);
+            if (match) {
+              availableDrugs.push({ id: match[1], name: match[2] });
+            }
+          }
+        }
+      }
+
+      if (availableDrugs.length === 0) {
+        availableDrugs = [
+          { id: 't1', name: 'Metformin' },
+          { id: 't2', name: 'Atorvastatin' },
+          { id: 't3', name: 'Lisinopril' },
+          { id: 't4', name: 'Amlodipine' },
+          { id: 't5', name: 'Omeprazole' }
+        ];
+      }
+
+      const shuffled = [...availableDrugs].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, Math.min(n, shuffled.length)).map(d => ({
+        name: d.name,
+        dose: 100,
+        unit: 'mg',
+        route: 'PO',
+        ka: 1.5,
+        ke: 0.2,
+        vd: 50,
+        kd: 1.0,
+        hillN: 1.0
+      }));
+
+      sendSSE(100, "Complete", selected, null);
+    } catch (err) {
+      sendSSE(100, "Error", null, err.message);
+    }
+    res.end();
+  }, 300);
+});
+
 // --- OLLAMA NATURAL LANGUAGE SERIALIZER ENDPOINT ---
 app.post("/api/parse-formula", async (req, res) => {
   const { inputList } = req.body;
   if (!inputList) return res.status(400).json({ error: "No input list provided." });
 
   const ingredientsDb = [];
-  fs.createReadStream(path.join(__dirname, "ingredients.csv"))
+  const csvPath = path.join(__dirname, "ingredients.csv");
+  if (!fs.existsSync(csvPath)) return res.status(500).json({ error: "ingredients.csv not found" });
+
+  fs.createReadStream(csvPath)
     .pipe(csv())
     .on("data", (data) => {
       const cas = data.cas || data.CAS || Object.values(data)[0];
@@ -64,45 +163,6 @@ app.post("/api/parse-formula", async (req, res) => {
     });
 });
 
-// --- OLLAMA OBJECT-RIGGING-PHYSICS SEQUENCING ENDPOINT ---
-app.post("/api/generate-rigging-sequence", async (req, res) => {
-  const { promptText } = req.body;
-  if (!promptText) return res.status(400).json({ error: "No prompt text provided." });
-
-  const ollamaHost = process.env.OLLAMA_HOST || "http://localhost:11434";
-  const systemPrompt = `You are a physics and object-rigging simulation engine. Translate the user description into a structured JSON array of physical rigging events, constraints, forces, and object transformations for simulation sequencing. 
-Return ONLY a valid JSON array of objects with keys: "objectId", "action", "forceVector" [fx, fy, fz], "elasticity", "viscosity", and "triggerTime". No markdown formatting, no explanation.`;
-
-  try {
-    const ollamaRes = await fetch(`${ollamaHost}/api/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "llama3.2",
-        prompt: `${systemPrompt}\n\nDescription: ${promptText}`,
-        stream: false,
-        format: "json"
-      })
-    });
-
-    const data = await ollamaRes.json();
-    let cleaned = data.response.trim();
-    if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
-    if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
-    if (cleaned.endsWith("```")) cleaned = cleaned.slice(-3);
-
-    const parsedSequence = JSON.parse(cleaned.trim());
-    
-    // Save generated rigging physics profile for C backend ingestion
-    fs.writeFileSync(path.join(__dirname, "rigging_sequence.json"), JSON.stringify(parsedSequence, null, 2));
-
-    res.json({ success: true, sequence: parsedSequence });
-  } catch (err) {
-    console.error("Ollama rigging sequence error:", err);
-    res.status(500).json({ success: false, error: err.message, sequence: [] });
-  }
-});
-
 // Density Normalization Algorithm & Render Stream
 app.post("/api/render-stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
@@ -112,7 +172,14 @@ app.post("/api/render-stream", (req, res) => {
   const { seconds = 20, fps = 30, velocity = 25.0, temp = 298.15, humidity = 0.5, ingredients = [] } = req.body;
 
   const ingredientDataMap = {};
-  fs.createReadStream(path.join(__dirname, "ingredients.csv"))
+  const csvPath = path.join(__dirname, "ingredients.csv");
+  if (!fs.existsSync(csvPath)) {
+    res.write(`data: ${JSON.stringify({ error: "ingredients.csv not found" })}\n\n`);
+    res.end();
+    return;
+  }
+
+  fs.createReadStream(csvPath)
     .pipe(csv())
     .on("data", (row) => {
       const cas = row.cas || row.CAS || Object.values(row)[0];
@@ -148,6 +215,10 @@ app.post("/api/render-stream", (req, res) => {
             res.write(`data: ${JSON.stringify({ progress: parseInt(val) })}\n\n`);
           }
         }
+      });
+
+      child.stderr.on("data", (data) => {
+        console.error("Renderer stderr:", data.toString());
       });
 
       child.on("close", (code) => {

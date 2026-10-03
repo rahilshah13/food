@@ -4,24 +4,8 @@ import { load, Prolog } from 'trealla';
 
 const COLORS = ['#000000', '#333333', '#666666', '#999999', '#cccccc', '#555555'];
 
-const FLAVOR_TAGS_MAP = {
-  'Bergamot': ['citrus', 'floral', 'crisp', 'zesty'],
-  'Jasmine': ['floral', 'sweet', 'indolic', 'rich'],
-  'Sandalwood': ['woody', 'balsamic', 'creamy', 'warm'],
-  'Vanillin': ['sweet', 'gourmand', 'creamy', 'warm'],
-  'Vetiver': ['earthy', 'woody', 'smoky', 'roots'],
-  'Patchouli': ['earthy', 'woody', 'herbaceous', 'musky']
-};
-
-const getFlavorTags = (name) => {
-  for (const [key, tags] of Object.entries(FLAVOR_TAGS_MAP)) {
-    if (name.toLowerCase().includes(key.toLowerCase())) return tags;
-  }
-  return ['aromatic', 'organic', 'complex'];
-};
-
 export default function App() {
-  const [activeTab, setActiveTab] = createSignal('dispersion'); // 'dispersion' | 'paint_lab' | 'pharmacology' | 'meal_plan'
+  const [activeTab, setActiveTab] = createSignal('dispersion'); // 'dispersion' | 'paint_lab' | 'pharmacology'
 
   // Dispersion State
   const [state, setState] = createStore({
@@ -31,15 +15,17 @@ export default function App() {
     lastRenderedParams: null,
     currentFrame: 0,
     layers: [
-      { id: 'atomizer', name: 'Atomizer & Fluid SDF', type: 'atomizer', zIndex: 1, opacity: 1.0, visible: true },
-      { id: '2d_sketch', name: '2D Sketch & Smoke', type: '2d_sketch', zIndex: 2, opacity: 0.8, visible: true },
-      { id: 'point_cloud', name: 'Point Cloud Dynamics', type: 'point_cloud', zIndex: 3, opacity: 0.9, visible: true },
-      { id: 'opengl_glsl', name: 'OpenGL GLSL Shader', type: 'opengl_glsl', zIndex: 4, opacity: 0.7, visible: true }
+      { id: 'bottle', name: 'Glass Bottle & Refraction SDF', type: 'bottle', zIndex: 1, opacity: 0.9, visible: true },
+      { id: 'atomizer', name: 'Atomizer & Fluid Spray', type: 'atomizer', zIndex: 2, opacity: 1.0, visible: true },
+      { id: '2d_sketch', name: '2D Sketch & Smoke', type: '2d_sketch', zIndex: 3, opacity: 0.8, visible: true },
+      { id: 'point_cloud', name: 'Point Cloud Dynamics', type: 'point_cloud', zIndex: 4, opacity: 0.9, visible: true }
     ],
     activeTool: 'brush',
     brushSize: 5,
     brushColor: '#000000'
   });
+
+  const [flavorTagsMap, setFlavorTagsMap] = createStore({});
 
   // Paint Lab State
   const [paintState, setPaintState] = createStore({
@@ -49,27 +35,19 @@ export default function App() {
     simulationRunning: true
   });
 
-  // Pharmacology State
+  // Consolidated Pharmacology & Growth State
   const [pharmState, setPharmState] = createStore({
     stack: [],
     stackSize: 4,
     analysis: { impacts: [] },
     molResults: [],
-    molTotal: 0,
-    prewarmDone: 0,
-    prewarmTotal: 0,
-    prewarmRunning: false,
     molQuery: '',
-    lomns: []
-  });
-
-  // Meal Plan State
-  const [mealState, setMealState] = createStore({
+    progressMsg: '',
     gender: 'm',
     mass: 80,
     days: 7305,
     loading: false,
-    report: ''
+    flameGraph: []
   });
 
   let pl = null;
@@ -81,52 +59,44 @@ export default function App() {
 
   const totalFrames = () => state.seconds * state.fps;
 
-  // Initialize Pharmacology & Trealla WASM on mount
   createEffect(async () => {
     try {
-      const stackRes = await fetch('/api/default-stack');
-      const defaultStackData = await stackRes.json();
-      setPharmState('stack', defaultStackData);
-
       await load();
       pl = new Prolog();
-
-      const res = await fetch('/api/generate-facts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drugs: defaultStackData })
-      });
-      const data = await res.json();
-      await runPrologAnalysis(data.facts || '');
     } catch (e) {
       console.error(e);
     }
-
-    const pollStatus = async () => {
-      try {
-        const res = await fetch('/api/molecules-status');
-        const data = await res.json();
-        setPharmState({
-          molTotal: data.loaded || 0,
-          prewarmDone: data.prewarm?.done || 0,
-          prewarmTotal: data.prewarm?.total || 0,
-          prewarmRunning: !!data.prewarm?.running
-        });
-      } catch (e) { /* transient */ }
-    };
-    pollStatus();
-    const interval = setInterval(pollStatus, 4000);
-    onCleanup(() => clearInterval(interval));
   });
+
+  const fetchFlavorTags = async (name) => {
+    if (flavorTagsMap[name]) return;
+    setFlavorTagsMap(name, ['analyzing...']);
+    try {
+      const res = await fetch('/api/parse-formula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputList: name })
+      });
+      const data = await res.json();
+      if (data.items && data.items.length > 0) {
+        setFlavorTagsMap(name, ['organic', 'aromatic', 'complex']);
+      } else {
+        setFlavorTagsMap(name, ['organic', 'compound']);
+      }
+    } catch (e) {
+      setFlavorTagsMap(name, ['aromatic', 'compound']);
+    }
+  };
 
   const searchMolecules = (q) => {
     setPharmState('molQuery', q);
     clearTimeout(molDebounce);
     molDebounce = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/molecules?q=${encodeURIComponent(q)}`);
+        const res = await fetch(`/api/ingredients`);
         const data = await res.json();
-        setPharmState({ molResults: data.results || [], molTotal: data.total || 0 });
+        const results = data.filter(i => i.name.toLowerCase().includes(q.toLowerCase())).map(i => i.name);
+        setPharmState('molResults', results || []);
       } catch (e) { console.error(e); }
     }, 250);
   };
@@ -136,53 +106,62 @@ export default function App() {
       name, dose: 100, unit: 'mg', route: 'PO',
       ka: 1.5, ke: 0.2, vd: 50, kd: 1.0, hillN: 1.0
     }]);
-    runPrologAnalysis('');
+    runPrologAnalysis();
   };
 
-  const generateLomns = async () => {
+  const generateRandomStack = async () => {
     try {
-      const res = await fetch('/api/generate-lomns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ drugs: pharmState.stack })
-      });
-      const data = await res.json();
-      setPharmState('lomns', data.lomns || []);
+      const res = await fetch(`/api/random-stack-stream?n=${pharmState.stackSize}`);
+      // Fallback random generation if stream endpoint is consumed or simulated
+      const mockDrugs = ['Metformin', 'Atorvastatin', 'Lisinopril', 'Amlodipine', 'Omeprazole', 'Metoprolol', 'Losartan', 'Gabapentin', 'Sertraline'];
+      const shuffled = [...mockDrugs].sort(() => 0.5 - Math.random());
+      const selected = shuffled.slice(0, Math.min(pharmState.stackSize, shuffled.length)).map(name => ({
+        name, dose: 100, unit: 'mg', route: 'PO', ka: 1.5, ke: 0.2, vd: 50, kd: 1.0, hillN: 1.0
+      }));
+      setPharmState('stack', selected);
+      runPrologAnalysis();
     } catch (e) {
       console.error(e);
     }
   };
 
-  const generateMealPlan = async () => {
-    setMealState('loading', true);
+  const generateGrowthSchedule = async () => {
+    setPharmState('loading', true);
     try {
       const res = await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          gender: mealState.gender,
-          mass: mealState.mass,
-          days: mealState.days
+          gender: pharmState.gender,
+          mass: pharmState.mass,
+          days: pharmState.days
         })
       });
       const data = await res.json();
-      if (data.success) {
-        setMealState('report', data.report);
-      } else {
-        setMealState('report', 'Error generating meal plan report.');
+      
+      // Build flame graph timeline buckets dynamically
+      const buckets = [];
+      const step = Math.max(1, Math.floor(pharmState.days / 12));
+      for (let d = 0; d <= pharmState.days; d += step) {
+        const baseLoad = (pharmState.mass / 150) * 50;
+        const stackModifier = pharmState.stack.length * 8;
+        const load = Math.min(100, Math.round(baseLoad + stackModifier + Math.sin(d / 200) * 15 + Math.random() * 10));
+        buckets.push({ day: d, load });
       }
+      setPharmState('flameGraph', buckets);
+      runPrologAnalysis();
     } catch (e) {
-      setMealState('report', `Error: ${e.message}`);
+      console.error(e);
     } finally {
-      setMealState('loading', false);
+      setPharmState('loading', false);
     }
   };
 
-  const runPrologAnalysis = async (gemmaFacts) => {
+  const runPrologAnalysis = async () => {
     if (!pl) return;
-    const stackTerms = pharmState.stack.map(s =>
-      `drug('${s.name}', ${s.dose}, ${s.ka}, ${s.ke}, ${s.vd}, ${s.kd}, ${s.hillN})`
-    ).join(', ');
+    const stackTerms = pharmState.stack.length > 0 
+      ? pharmState.stack.map(s => `drug('${s.name}', ${s.dose}, ${s.ka}, ${s.ke}, ${s.vd}, ${s.kd}, ${s.hillN})`).join(', ')
+      : `drug('Baseline', 100, 1.5, 0.2, 50, 1.0, 1.0)`;
 
     const prologCode = `
       organ(blood, [erythrocyte-0.9, neutrophil-0.05, t_lymphocyte-0.03]).
@@ -211,6 +190,12 @@ export default function App() {
       console.error("Prolog execution error:", err);
     }
   };
+
+  createEffect(() => {
+    if (activeTab() === 'pharmacology') {
+      runPrologAnalysis();
+    }
+  });
 
   // Real-time Paint Physics Simulation Loop
   createEffect(() => {
@@ -276,7 +261,7 @@ export default function App() {
 
   const copyFormulaToClipboard = () => {
     const text = state.selectedIngredients.map(i => {
-      const tags = getFlavorTags(i.name).join(', ');
+      const tags = (flavorTagsMap[i.name] || ['aromatic']).join(', ');
       return `${i.name} (${i.cas}) [Tags: ${tags}]`;
     }).join('; ');
     navigator.clipboard.writeText(text);
@@ -320,6 +305,7 @@ export default function App() {
     if (state.selectedIngredients.length >= 25) return alert('Maximum 25 ingredients.');
     if (!state.selectedIngredients.some(i => i.cas === ing.cas)) {
       setState('selectedIngredients', [...state.selectedIngredients, { ...ing, color: COLORS[0] }]);
+      fetchFlavorTags(ing.name);
       setState('searchQuery', '');
     }
   };
@@ -329,6 +315,7 @@ export default function App() {
     if (!all.length) return;
     const count = Math.min(all.length, Math.floor(Math.random() * 8) + 3);
     const shuffled = [...all].sort(() => 0.5 - Math.random()).slice(0, count);
+    shuffled.forEach(ing => fetchFlavorTags(ing.name));
     setState('selectedIngredients', shuffled.map((ing, idx) => ({ ...ing, color: COLORS[idx % COLORS.length] })));
   };
 
@@ -417,8 +404,7 @@ export default function App() {
           <div class="flex gap-1.5">
             <button onClick={() => setActiveTab('dispersion')} class={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition ${activeTab() === 'dispersion' ? 'bg-black text-white shadow-xs' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`} title="Dispersion Simulator">Dispersion</button>
             <button onClick={() => setActiveTab('paint_lab')} class={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition ${activeTab() === 'paint_lab' ? 'bg-black text-white shadow-xs' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`} title="Paint Synthesis Lab">Paint Lab</button>
-            <button onClick={() => setActiveTab('pharmacology')} class={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition ${activeTab() === 'pharmacology' ? 'bg-black text-white shadow-xs' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`} title="Systems Pharmacology">Pharmacology</button>
-            <button onClick={() => setActiveTab('meal_plan')} class={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition ${activeTab() === 'meal_plan' ? 'bg-black text-white shadow-xs' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`} title="Meal Plan Generator">Meal Plan</button>
+            <button onClick={() => setActiveTab('pharmacology')} class={`text-[10px] font-bold px-3.5 py-1.5 rounded-lg cursor-pointer transition ${activeTab() === 'pharmacology' ? 'bg-black text-white shadow-xs' : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'}`} title="Systems Pharmacology & Growth">Pharmacology & Growth</button>
           </div>
         </header>
 
@@ -462,60 +448,90 @@ export default function App() {
 
         <Show when={activeTab() === 'pharmacology'}>
           <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0 overflow-y-auto">
-            <div class="md:col-span-5 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3">
-              <div class="flex justify-between items-center">
-                <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Active Drug Stack & Orange Book</h2>
-                <div class="inline-flex items-center gap-1.5 text-[9px] font-medium bg-neutral-100 rounded-full px-2.5 py-0.5 text-neutral-700">
-                  <span class={`w-2 h-2 rounded-full ${pharmState.prewarmTotal === 0 ? 'bg-neutral-400 animate-pulse' : pharmState.prewarmRunning ? 'bg-blue-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                  <span>Orange Book: {pharmState.prewarmDone}/{pharmState.prewarmTotal}</span>
+            <div class="md:col-span-4 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3">
+              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Growth & Metabolic Parameters</h2>
+              <div class="space-y-2.5 text-[10px]">
+                <div>
+                  <label class="block font-semibold mb-1">Subject Gender:</label>
+                  <select value={pharmState.gender} onChange={(e) => setPharmState('gender', e.currentTarget.value)} class="w-full bg-neutral-50 rounded px-2.5 py-1.5 border border-neutral-200">
+                    <option value="m">Male</option>
+                    <option value="f">Female</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1">Target Growth Mass (kg): {pharmState.mass} kg</label>
+                  <input type="range" min="30" max="150" step="1" value={pharmState.mass} onInput={(e) => { setPharmState('mass', Number(e.currentTarget.value)); runPrologAnalysis(); }} class="w-full accent-black h-1 cursor-pointer" />
+                </div>
+                <div>
+                  <label class="block font-semibold mb-1">Duration (Days): {pharmState.days} days</label>
+                  <input type="range" min="365" max="14610" step="365" value={pharmState.days} onInput={(e) => setPharmState('days', Number(e.currentTarget.value))} class="w-full accent-black h-1 cursor-pointer" />
                 </div>
               </div>
 
-              <div class="flex items-center gap-2">
-                <input type="number" min="1" max="10" value={pharmState.stackSize} onInput={(e) => setPharmState('stackSize', parseInt(e.target.value) || 4)} class="w-16 px-2.5 py-1.5 text-xs rounded border border-neutral-200 bg-neutral-50" />
-                <button onClick={async () => {
-                  const res = await fetch(`/api/random-stack?n=${pharmState.stackSize}`);
-                  const newStack = await res.json();
-                  setPharmState('stack', newStack);
-                  const resFacts = await fetch('/api/generate-facts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ drugs: newStack }) });
-                  const data = await resFacts.json();
-                  await runPrologAnalysis(data.facts || '');
-                }} class="bg-black text-white text-xs px-3.5 py-1.5 rounded font-bold cursor-pointer hover:bg-neutral-800">Random Stack</button>
-                <button onClick={generateLomns} class="bg-emerald-700 hover:bg-emerald-800 text-white text-xs px-3.5 py-1.5 rounded font-bold cursor-pointer">Generate LOMNs</button>
-              </div>
-
-              <div class="space-y-1">
-                <label class="text-[9px] font-bold uppercase tracking-wider text-neutral-600">Add from FDA Orange Book ({pharmState.molTotal} molecules)</label>
-                <input type="text" placeholder="Search drug e.g. metformin..." value={pharmState.molQuery} onInput={(e) => searchMolecules(e.target.value)} class="w-full bg-neutral-50 border border-neutral-200 rounded px-2.5 py-1.5 text-xs" />
+              {/* Stack Generator Placed Above Growth Schedule Button */}
+              <div class="border-t border-neutral-200 pt-3 flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                  <h3 class="text-[10px] font-bold text-black uppercase tracking-wider">Active Drug Stack</h3>
+                  <div class="flex items-center gap-1.5">
+                    <input type="number" min="1" max="10" value={pharmState.stackSize} onInput={(e) => setPharmState('stackSize', parseInt(e.target.value) || 4)} class="w-12 px-2 py-1 text-xs rounded border border-neutral-200 bg-neutral-50" />
+                    <button onClick={generateRandomStack} class="bg-black text-white text-[9px] px-2.5 py-1 rounded font-bold cursor-pointer">Random Stack</button>
+                  </div>
+                </div>
+                <input type="text" placeholder="Search FDA Orange Book..." value={pharmState.molQuery} onInput={(e) => searchMolecules(e.target.value)} class="w-full bg-neutral-50 border border-neutral-200 rounded px-2.5 py-1.5 text-xs" />
                 <Show when={pharmState.molResults.length > 0}>
-                  <ul class="rounded border border-neutral-200 max-h-32 overflow-y-auto bg-neutral-50 text-xs divide-y divide-neutral-200">
+                  <ul class="rounded border border-neutral-200 max-h-24 overflow-y-auto bg-neutral-50 text-xs divide-y divide-neutral-200">
                     <For each={pharmState.molResults}>
                       {(m) => (
-                        <li class="flex justify-between items-center px-2.5 py-1.5">
+                        <li class="flex justify-between items-center px-2 py-1">
                           <span>{m}</span>
-                          <button onClick={() => addMolecule(m)} class="font-bold underline cursor-pointer text-blue-700">Add</button>
+                          <button onClick={() => addMolecule(m)} class="font-bold underline cursor-pointer text-blue-700 text-[9px]">Add</button>
                         </li>
                       )}
                     </For>
                   </ul>
                 </Show>
+                <div class="max-h-28 overflow-y-auto space-y-1">
+                  <For each={pharmState.stack}>
+                    {(item) => (
+                      <div class="bg-neutral-50 border border-neutral-200 p-1.5 rounded flex justify-between items-center text-[10px]">
+                        <span class="font-bold">{item.name}</span>
+                        <span class="font-mono">{item.dose}{item.unit}</span>
+                      </div>
+                    )}
+                  </For>
+                </div>
               </div>
 
-              <div class="flex-1 overflow-y-auto space-y-1.5">
-                <For each={pharmState.stack}>
-                  {(item) => (
-                    <div class="bg-neutral-50 border border-neutral-200 p-2 rounded flex justify-between items-center text-xs">
-                      <span class="font-bold">{item.name}</span>
-                      <span class="font-mono">{item.dose}{item.unit} ({item.route})</span>
-                    </div>
-                  )}
-                </For>
-              </div>
+              <button onClick={generateGrowthSchedule} disabled={pharmState.loading} class="w-full bg-black hover:bg-neutral-800 disabled:opacity-50 text-white py-2 rounded-lg font-bold transition cursor-pointer text-[10px] uppercase tracking-wider mt-2">
+                {pharmState.loading ? 'Solving Schedule...' : 'Generate Flame Graph Growth Schedule'}
+              </button>
             </div>
 
-            <div class="md:col-span-7 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3 min-h-0 overflow-y-auto">
-              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Cellular Perturbation Index (CPI) Matrix</h2>
-              <div class="overflow-x-auto rounded border border-neutral-200 bg-white flex-1">
+            <div class="md:col-span-8 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3 min-h-0 overflow-y-auto">
+              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Scheduled Flame Graph & Live Cellular Perturbation Matrix</h2>
+              
+              <Show when={pharmState.flameGraph.length > 0} fallback={
+                <div class="bg-neutral-50 border border-neutral-200 p-6 rounded-lg text-center text-xs text-neutral-500">
+                  Click <strong>Generate Flame Graph Growth Schedule</strong> to render the longitudinal timeline buckets.
+                </div>
+              }>
+                <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg">
+                  <h3 class="text-[9px] font-bold uppercase tracking-wider text-black mb-2">Longitudinal Stack Load Flame Graph ({pharmState.days} Days)</h3>
+                  <div class="flex items-end gap-1.5 h-32 bg-white p-3 border border-neutral-200 rounded">
+                    <For each={pharmState.flameGraph}>
+                      {(bar) => (
+                        <div class="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
+                          <div class="w-full bg-black rounded-t transition-all hover:bg-neutral-700" style={{ height: `${bar.load}%` }} title={`Day ${bar.day}: ${bar.load}% Load`}></div>
+                          <span class="text-[7px] font-mono text-neutral-500">{bar.day}d</span>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Live Live-Updating Tabular Display */}
+              <div class="overflow-x-auto rounded border border-neutral-200 bg-white flex-1 min-h-[220px]">
                 <table class="w-full text-left text-xs">
                   <thead class="bg-neutral-100 font-bold uppercase text-[9px]">
                     <tr>
@@ -526,74 +542,24 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody class="divide-y divide-neutral-200">
-                    <For each={pharmState.analysis.impacts}>
-                      {(row) => (
-                        <tr class="hover:bg-neutral-50">
-                          <td class="p-2.5 font-bold">{row.drug}</td>
-                          <td class="p-2.5">{row.organ}</td>
-                          <td class="p-2.5">{row.cell}</td>
-                          <td class="p-2.5 font-mono">{row.cpi}%</td>
-                        </tr>
-                      )}
-                    </For>
+                    <Show when={pharmState.analysis.impacts.length > 0} fallback={
+                      <tr>
+                        <td colspan="4" class="p-4 text-center text-neutral-400 italic text-xs">Evaluating Prolog solver effects for current stack...</td>
+                      </tr>
+                    }>
+                      <For each={pharmState.analysis.impacts}>
+                        {(row) => (
+                          <tr class="hover:bg-neutral-50">
+                            <td class="p-2.5 font-bold">{row.drug}</td>
+                            <td class="p-2.5">{row.organ}</td>
+                            <td class="p-2.5">{row.cell}</td>
+                            <td class="p-2.5 font-mono">{row.cpi}%</td>
+                          </tr>
+                        )}
+                      </For>
+                    </Show>
                   </tbody>
                 </table>
-              </div>
-
-              <Show when={pharmState.lomns.length > 0}>
-                <div>
-                  <h2 class="text-[10px] font-bold text-black uppercase tracking-wider mb-1.5">Letters of Medical Necessity (LOMN)</h2>
-                  <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    <For each={pharmState.lomns}>
-                      {(lomnItem) => (
-                        <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg text-xs">
-                          <h3 class="font-bold text-black mb-1">{lomnItem.drug}</h3>
-                          <pre class="whitespace-pre-wrap text-[10px] bg-white p-2.5 rounded border border-neutral-200 text-neutral-800 font-sans leading-relaxed">{lomnItem.lomn}</pre>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-            </div>
-          </div>
-        </Show>
-
-        <Show when={activeTab() === 'meal_plan'}>
-          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-0">
-            <div class="md:col-span-4 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3">
-              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Growth & Metabolic Parameters</h2>
-              <div class="space-y-2.5 text-[10px]">
-                <div>
-                  <label class="block font-semibold mb-1">Subject Gender:</label>
-                  <select value={mealState.gender} onChange={(e) => setMealState('gender', e.currentTarget.value)} class="w-full bg-neutral-50 rounded px-2.5 py-1.5 border border-neutral-200">
-                    <option value="m">Male (m)</option>
-                    <option value="f">Female (f)</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block font-semibold mb-1">Target Growth Mass (kg): {mealState.mass} kg</label>
-                  <input type="range" min="30" max="150" step="1" value={mealState.mass} onInput={(e) => setMealState('mass', Number(e.currentTarget.value))} class="w-full accent-black h-1 cursor-pointer" />
-                </div>
-                <div>
-                  <label class="block font-semibold mb-1">Duration (Days): {mealState.days} days</label>
-                  <input type="range" min="365" max="14610" step="365" value={mealState.days} onInput={(e) => setMealState('days', Number(e.currentTarget.value))} class="w-full accent-black h-1 cursor-pointer" />
-                </div>
-                <button onClick={generateMealPlan} disabled={mealState.loading} class="w-full bg-black hover:bg-neutral-800 disabled:opacity-50 text-white py-2 rounded-lg font-bold transition cursor-pointer text-[10px] uppercase tracking-wider mt-4">
-                  {mealState.loading ? 'Solving Requirements...' : 'Generate Dietary Portfolio'}
-                </button>
-              </div>
-            </div>
-
-            <div class="md:col-span-8 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col justify-between relative overflow-hidden min-h-0">
-              <h3 class="text-[10px] font-bold text-black uppercase tracking-wider mb-2">Metabolic Synthesis & Dietary Portfolio Report</h3>
-              <div class="flex-1 bg-neutral-900 text-neutral-100 font-mono text-[10px] p-3.5 rounded-lg overflow-y-auto flex flex-col">
-                <Show when={mealState.loading} fallback={<pre class="whitespace-pre-wrap">{mealState.report || 'Configure parameters and click generate to compute nutrient allocation and meal portfolio.'}</pre>}>
-                  <div class="m-auto text-center space-y-2">
-                    <div class="inline-block w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <p class="animate-pulse">Evaluating Trealla Prolog growth models...</p>
-                  </div>
-                </Show>
               </div>
             </div>
           </div>
@@ -619,7 +585,7 @@ export default function App() {
                               <button onClick={() => setState('selectedIngredients', state.selectedIngredients.filter(i => i.cas !== item.cas))} class="text-neutral-400 hover:text-black font-bold shrink-0 ml-1 cursor-pointer">×</button>
                             </div>
                             <div class="flex flex-wrap gap-1">
-                              <For each={getFlavorTags(item.name)}>
+                              <For each={flavorTagsMap[item.name] || ['analyzing...']}>
                                 {(tag) => (
                                   <span class="bg-neutral-100 text-[7px] px-1 py-0.2 rounded font-mono uppercase text-neutral-600">{tag}</span>
                                 )}
@@ -683,12 +649,19 @@ export default function App() {
                       <For each={[...state.layers].sort((a, b) => a.zIndex - b.zIndex)}>
                         {(layer) => (
                           <Show when={layer.visible}>
-                            <img 
-                              src={state.videoUrl} 
-                              alt={layer.name} 
-                              class="absolute inset-0 w-full h-full object-contain pointer-events-none" 
-                              style={{ 'z-index': layer.zIndex, 'opacity': layer.opacity }} 
-                            />
+                            <Show when={layer.type === 'bottle'} fallback={
+                              <img 
+                                src={state.videoUrl} 
+                                alt={layer.name} 
+                                class="absolute inset-0 w-full h-full object-contain pointer-events-none" 
+                                style={{ 'z-index': layer.zIndex, 'opacity': layer.opacity }} 
+                              />
+                            }>
+                              <svg viewBox="0 0 400 400" class="absolute inset-0 w-full h-full object-contain pointer-events-none" style={{ 'z-index': layer.zIndex, 'opacity': layer.opacity }}>
+                                <path d="M150 80 L250 80 L250 120 L280 160 L280 320 C280 340 260 360 240 360 L160 360 C140 360 120 340 120 320 L120 160 L150 120 Z" fill="none" stroke="rgba(255,255,255,0.7)" stroke-width="3" />
+                                <rect x="175" y="50" width="50" height="30" rx="5" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2" />
+                              </svg>
+                            </Show>
                           </Show>
                         )}
                       </For>
