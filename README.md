@@ -62,31 +62,16 @@
 * `food_data(+ID, +Name, +NutrientList)`: Nutritional inventory
 
 ---
-### `alloy.pl`
+### `materials.pl`
+```
+tpl -g "estimate_mechanical_properties([(fe, 92.0), (c, 1.0), (mn, 2.0), (si, 1.5), (p, 0.05), (s, 0.05)], D, M), format('Ductility: ~w, Malleability: ~w~n', [D, M]), halt." materials.pl
 
-* evaluates the estimated tensile ductility and malleability of alloy compositions using a multi-phase rule of mixtures and non-linear solute solubility penalties.
+tpl -g "estimate_cell_properties([(li, 10.0), (co, 40.0), (ni, 50.0)], 50, C, D, S), halt." materials.pl
 
-* Null Example: calculates properties for carbon, demonstrating the structural penalties applied to pure interstitial non-metals.
-* `tpl engine.pl "estimate_mechanical_properties([(c, 100.0)], D, M)"`
-* novel alloy example
-* `tpl engine.pl "estimate_mechanical_properties([(ti, 60.0), (al, 10.0), (v, 15.0), (mo, 10.0), (zr, 5.0)], D, M)"`
+tpl -g "smiles_to_mass_list(\"CC(=O)OC1=CC=CC=C1C(=O)O\", ML), writeln(ML), halt." materials.pl
 
---- 
-### `battery.pl`
-* Uses stoichiometric analysis with `cheese.pl` inspired recipe-driven constraints to make batteries.
-* **Standard Cell Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 50.0), (co, 30.0), (o, 20.0)], 50, C, D, S)"`
-  * Evaluates cell manufacturing parameters, capacity, and stability for a lithium-cobalt composition using valid liquid electrolyte configurations.
-* **Solid-State Evaluation**: `tpl engine.pl "estimate_cell_properties([(li, 40.0), (si, 30.0), (o, 30.0)], 100, C, D, S)"`
-
-
---- 
-
-### `smiles.pl` 
-
-* `iterate_smiles_from_mass([(c, 24.02), (h, 6.05), (o, 16.0)], Smiles)`: Iterates through matching topological SMILES strings in the library that align with an ethanol mass profile, yielding valid string representations.
-* `smiles_to_mass_list('CC(=O)OC1=CC=CC=C1C(=O)O', MassList)`: Parses an input SMILES string (such as aspirin) through the atom extractor and periodic table database to calculate and return its total elemental mass breakdown.
-* `match_mass_profile([(c, 72.0), (h, 12.0)], [(c, 72.066), (h, 6.048)])`: Normalizes, sorts, and checks a target element-mass list against a known molecule's profile within an absolute tolerance range of 2.5.
-
+tpl -g "iterate_smiles_from_mass([(c, 36.0), (h, 6.0), (o, 47.0)], Smiles), writeln(Smiles), halt." materials.pl
+```
 
 ---
 
