@@ -1,1 +1,92 @@
 
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: perfume_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  simulator:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:20-bookworm-slim AS builder
+
+        RUN apt-get update && apt-get install -y \
+            build-essential \
+            ffmpeg \
+            libcsv-dev \
+            git \
+            bash \
+            python3 \
+            curl \
+            && rm -rf /var/lib/apt/lists/*
+
+        WORKDIR /app
+
+        RUN mkdir -p frontend/src && cd frontend && \
+            npm init -y && \
+            npm pkg set type="module" && \
+            npm install solid-js vite vite-plugin-solid trealla && \
+            npm install -D tailwindcss@3 postcss autoprefixer
+
+        WORKDIR /app/frontend
+
+        RUN echo 'import { defineConfig } from "vite";' > vite.config.js && \
+            echo 'import solid from "vite-plugin-solid";' >> vite.config.js && \
+            echo 'export default defineConfig({ plugins: [solid()], server: { port: 3000 } });' >> vite.config.js
+
+        RUN echo '/** @type {import("tailwindcss").Config} */' > tailwind.config.js && \
+            echo 'module.exports = { content: ["./index.html", "./src/**/*.{js,jsx,ts,tsx}"], theme: { extend: {}, }, plugins: [], }' >> tailwind.config.js
+
+        RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {}, }, }' > postcss.config.cjs
+
+        RUN echo '@tailwind base;' > src/index.css && \
+            echo '@tailwind components;' >> src/index.css && \
+            echo '@tailwind utilities;' >> src/index.css
+
+        RUN echo '<!DOCTYPE html>' > index.html && \
+            echo '<html lang="en">' >> index.html && \
+            echo '<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Perfume Simulator</title></head>' >> index.html && \
+            echo '<body class="bg-slate-50 text-slate-800"><div id="root"></div><script type="module" src="/src/index.jsx"></script></body>' >> index.html
+
+        RUN echo 'import { render } from "solid-js/web";' > src/index.jsx && \
+            echo 'import App from "./app.jsx";' >> src/index.jsx && \
+            echo 'import "./index.css";' >> src/index.jsx && \
+            echo 'render(() => <App />, document.getElementById("root"));' >> src/index.jsx
+
+        COPY src/app.jsx ./src/app.jsx
+
+        RUN npx vite build
+
+        WORKDIR /app
+
+        COPY src/render.c ./
+        COPY data/ingredients.csv ./
+        COPY data/food.pl data/grow.pl data/human.pl data/targets.pl ./
+        COPY src/server.js ./
+
+        RUN gcc -O3 -pthread render.c -o perfume_render -lm -lcsv
+
+        RUN npm init -y && npm install express cors csv-parser node-fetch
+
+        RUN mkdir -p server/public && cp -r frontend/dist/* server/public/ 2>/dev/null || true
+
+        EXPOSE 3000
+        CMD ["node", "server.js"]
+    container_name: perfume_simulator
+    ports:
+      - "3000:3000"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
