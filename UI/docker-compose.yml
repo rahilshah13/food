@@ -59,6 +59,7 @@ services:
             echo 'import "./index.css";' >> src/index.jsx && \
             echo 'render(() => <App />, document.getElementById("root"));' >> src/index.jsx
 
+        COPY src/state.jsx ./src/state.jsx
         COPY src/app.jsx ./src/app.jsx
 
         RUN npx vite build
@@ -67,12 +68,12 @@ services:
 
         COPY src/render.c ./
         COPY data/ingredients.csv ./
-        COPY data/food.pl data/grow.pl data/human.pl data/targets.pl ./
+        COPY data/food.pl data/grow.pl data/human.pl data/targets.pl data/daily_schedule.pl ./
         COPY src/server.js ./
 
         RUN gcc -O3 -pthread render.c -o perfume_render -lm -lcsv
 
-        RUN npm init -y && npm install express cors csv-parser node-fetch
+        RUN npm init -y && npm install express cors csv-parser node-fetch trealla
 
         RUN mkdir -p server/public && cp -r frontend/dist/* server/public/ 2>/dev/null || true
 

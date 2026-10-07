@@ -1,9 +1,10 @@
 const express = require("express");
-const { exec, spawn } = require("child_process");
+const { exec } = require("child_process");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const csv = require("csv-parser");
+const { Prolog, load } = require("trealla");
 
 const app = express();
 app.use(cors());
@@ -12,7 +13,6 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 app.use(express.static(path.join(__dirname, "server/public")));
 
-// Load ingredients CSV for lookup
 app.get("/api/ingredients", (req, res) => {
   const results = [];
   const csvPath = path.join(__dirname, "ingredients.csv");
@@ -27,38 +27,58 @@ app.get("/api/ingredients", (req, res) => {
     .on("end", () => res.json(results));
 });
 
-// --- MEAL PLAN POST ENDPOINT ---
-app.post("/api/meal-plan", (req, res) => {
+app.post("/api/meal-plan", async (req, res) => {
   const { gender = 'm', mass = 80, days = 7305 } = req.body;
   const filename = `human_growth_${Date.now()}.txt`;
   const filepath = path.join(__dirname, filename);
 
-  const tplArgs = [
-    path.join(__dirname, 'food.pl'),
-    path.join(__dirname, 'grow.pl'),
-    path.join(__dirname, 'human.pl'),
-    '-g', `write_human_report('${gender}', ${mass}, ${days}, '${filepath}'), halt.`
-  ];
+  try {
+    await load();
+    const pl = new Prolog();
+    const foodPl = fs.readFileSync(path.join(__dirname, 'data/food.pl'), 'utf8');
+    const growPl = fs.readFileSync(path.join(__dirname, 'data/grow.pl'), 'utf8');
+    const humanPl = fs.readFileSync(path.join(__dirname, 'data/human.pl'), 'utf8');
+    
+    await pl.consultText(foodPl);
+    await pl.consultText(growPl);
+    await pl.consultText(humanPl);
 
-  const tplProcess = spawn('tpl', tplArgs);
-  let stderrData = '';
-
-  tplProcess.stderr.on('data', (data) => {
-    stderrData += data.toString();
-  });
-
-  tplProcess.on('close', (code) => {
-    if (code === 0 && fs.existsSync(filepath)) {
+    await pl.queryOnce(`write_human_report('${gender}', ${mass}, ${days}, '${filepath}').`);
+    if (fs.existsSync(filepath)) {
       const reportContent = fs.readFileSync(filepath, 'utf8');
       try { fs.unlinkSync(filepath); } catch(e) {}
       res.json({ success: true, report: reportContent });
     } else {
-      res.status(500).json({ success: false, error: stderrData || `TPL execution failed with code ${code}` });
+      res.status(500).json({ success: false, error: "Report generation failed" });
     }
-  });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// --- RANDOM STACK STREAMING ENDPOINT ---
+app.post("/api/flame-schedule", async (req, res) => {
+  const { days = 7 } = req.body;
+  
+  try {
+    await load();
+    const pl = new Prolog();
+    const foodPl = fs.readFileSync(path.join(__dirname, 'data/food.pl'), 'utf8');
+    const schedPl = fs.readFileSync(path.join(__dirname, 'data/daily_schedule.pl'), 'utf8');
+
+    await pl.consultText(foodPl);
+    await pl.consultText(schedPl);
+
+    const queryRes = await pl.queryOnce(`generate_multi_day_plan(${days}, Plan).`);
+    if (queryRes && queryRes.answer && queryRes.answer.Plan) {
+      res.json({ success: true, data: queryRes.answer.Plan });
+    } else {
+      res.status(500).json({ success: false, error: "Prolog schedule generation returned empty result" });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/random-stack-stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -76,7 +96,7 @@ app.get("/api/random-stack-stream", (req, res) => {
     
     try {
       let availableDrugs = [];
-      const targetsPath = path.join(__dirname, "targets.pl");
+      const targetsPath = path.join(__dirname, "data/targets.pl");
       
       if (fs.existsSync(targetsPath)) {
         const lines = fs.readFileSync(targetsPath, 'utf8').split('\n');
@@ -121,7 +141,6 @@ app.get("/api/random-stack-stream", (req, res) => {
   }, 300);
 });
 
-// --- OLLAMA NATURAL LANGUAGE SERIALIZER ENDPOINT ---
 app.post("/api/parse-formula", async (req, res) => {
   const { inputList } = req.body;
   if (!inputList) return res.status(400).json({ error: "No input list provided." });
@@ -163,13 +182,12 @@ app.post("/api/parse-formula", async (req, res) => {
     });
 });
 
-// Density Normalization Algorithm & Render Stream
 app.post("/api/render-stream", (req, res) => {
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
 
-  const { seconds = 20, fps = 30, velocity = 25.0, temp = 298.15, humidity = 0.5, ingredients = [] } = req.body;
+  const { seconds = 20, fps = 30, velocity = 25.0, temp = 298.15, humidity = 0.5, ingredients = [], layers = [] } = req.body;
 
   const ingredientDataMap = {};
   const csvPath = path.join(__dirname, "ingredients.csv");
@@ -198,6 +216,7 @@ app.post("/api/render-stream", (req, res) => {
       });
 
       fs.writeFileSync(path.join(__dirname, "formula.txt"), processedFormula.map(i => `${i.cas}:${i.color}:${i.densityWeight}`).join("\n"));
+      fs.writeFileSync(path.join(__dirname, "layers.json"), JSON.stringify(layers, null, 2));
 
       const filename = `render_${Date.now()}.gif`;
       const pubDir = path.join(__dirname, "server/public");
