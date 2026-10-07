@@ -45,9 +45,10 @@ export default function App() {
     progressMsg: '',
     gender: 'm',
     mass: 80,
-    days: 7305,
+    days: 365,
     loading: false,
-    flameGraph: []
+    flameGrid: [],
+    selectedDayData: null
   });
 
   let pl = null;
@@ -112,23 +113,29 @@ export default function App() {
   const generateRandomStack = async () => {
     try {
       const res = await fetch(`/api/random-stack-stream?n=${pharmState.stackSize}`);
-      // Fallback random generation if stream endpoint is consumed or simulated
-      const mockDrugs = ['Metformin', 'Atorvastatin', 'Lisinopril', 'Amlodipine', 'Omeprazole', 'Metoprolol', 'Losartan', 'Gabapentin', 'Sertraline'];
-      const shuffled = [...mockDrugs].sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, Math.min(pharmState.stackSize, shuffled.length)).map(name => ({
-        name, dose: 100, unit: 'mg', route: 'PO', ka: 1.5, ke: 0.2, vd: 50, kd: 1.0, hillN: 1.0
-      }));
-      setPharmState('stack', selected);
-      runPrologAnalysis();
-    } catch (e) {
-      console.error(e);
-    }
+      const data = await res.json().catch(() => null);
+      if (data && data.stack) {
+        setPharmState('stack', data.stack);
+        runPrologAnalysis();
+        return;
+      }
+    } catch (e) { /* fallback */ }
+
+    const mockDrugs = ['Metformin', 'Atorvastatin', 'Lisinopril', 'Amlodipine', 'Omeprazole', 'Metoprolol', 'Losartan', 'Gabapentin', 'Sertraline'];
+    const shuffled = [...mockDrugs].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, Math.min(pharmState.stackSize, shuffled.length)).map(name => ({
+      name, dose: 100, unit: 'mg', route: 'PO',
+      ka: 1.5, ke: 0.2, vd: 50, kd: 1.0, hillN: 1.0
+    }));
+    setPharmState('stack', selected);
+    runPrologAnalysis();
   };
 
   const generateGrowthSchedule = async () => {
     setPharmState('loading', true);
     try {
-      const res = await fetch('/api/meal-plan', {
+      // Attempt optional backend call, but don't fail if route is missing
+      await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -136,22 +143,56 @@ export default function App() {
           mass: pharmState.mass,
           days: pharmState.days
         })
-      });
-      const data = await res.json();
-      
-      // Build flame graph timeline buckets dynamically
-      const buckets = [];
-      const step = Math.max(1, Math.floor(pharmState.days / 12));
-      for (let d = 0; d <= pharmState.days; d += step) {
-        const baseLoad = (pharmState.mass / 150) * 50;
-        const stackModifier = pharmState.stack.length * 8;
-        const load = Math.min(100, Math.round(baseLoad + stackModifier + Math.sin(d / 200) * 15 + Math.random() * 10));
-        buckets.push({ day: d, load });
+      }).catch(() => {});
+
+      const mockFoods = ['Avocado Salmon Salad', 'Oatmeal Protein Bowl', 'Quinoa Roasted Chicken', 'Greek Yogurt & Berries', 'Sweet Potato & Beef Stew', 'Lentil Spinach Soup'];
+      const gridDays = [];
+      const totalDays = pharmState.days;
+      const startDate = new Date(2026, 0, 1);
+
+      for (let d = 0; d < totalDays; d++) {
+        const currentDate = new Date(startDate);
+        currentDate.setDate(startDate.getDate() + d);
+
+        const year = currentDate.getFullYear();
+        const month = currentDate.toLocaleString('default', { month: 'short' });
+        const dayOfMonth = currentDate.getDate();
+        const dayOfWeek = currentDate.toLocaleString('default', { weekday: 'short' });
+
+        const foodConsumed = mockFoods[d % mockFoods.length];
+        const activeDrugs = pharmState.stack.map(s => s.name);
+
+        const calories = Math.round(2000 + Math.sin(d / 15) * 350 + (Math.random() * 200 - 100));
+        const protein = Math.round(120 + Math.cos(d / 20) * 30 + (Math.random() * 20 - 10));
+        const carbs = Math.round(220 + Math.sin(d / 10) * 50 + (Math.random() * 30 - 15));
+        const fat = Math.round(70 + Math.cos(d / 25) * 20 + (Math.random() * 15 - 7));
+        
+        const load = Math.min(100, Math.max(10, Math.round((calories / 3000) * 50 + activeDrugs.length * 10 + Math.random() * 15)));
+
+        gridDays.push({
+          dayIndex: d + 1,
+          dateStr: `${month} ${dayOfMonth}, ${year} (${dayOfWeek})`,
+          year,
+          month,
+          dayOfMonth,
+          calories,
+          protein,
+          carbs,
+          fat,
+          food: foodConsumed,
+          drugs: activeDrugs.length > 0 ? activeDrugs : ['None (Baseline)'],
+          load
+        });
       }
-      setPharmState('flameGraph', buckets);
+
+      setPharmState('flameGrid', gridDays);
+      if (gridDays.length > 0) {
+        setPharmState('selectedDayData', gridDays[0]);
+      }
       runPrologAnalysis();
     } catch (e) {
-      console.error(e);
+      console.error("Failed to generate growth schedule grid:", e);
+      setPharmState('flameGrid', []);
     } finally {
       setPharmState('loading', false);
     }
@@ -464,11 +505,10 @@ export default function App() {
                 </div>
                 <div>
                   <label class="block font-semibold mb-1">Duration (Days): {pharmState.days} days</label>
-                  <input type="range" min="365" max="14610" step="365" value={pharmState.days} onInput={(e) => setPharmState('days', Number(e.currentTarget.value))} class="w-full accent-black h-1 cursor-pointer" />
+                  <input type="range" min="30" max="14610" step="30" value={pharmState.days} onInput={(e) => setPharmState('days', Number(e.currentTarget.value))} class="w-full accent-black h-1 cursor-pointer" />
                 </div>
               </div>
 
-              {/* Stack Generator Placed Above Growth Schedule Button */}
               <div class="border-t border-neutral-200 pt-3 flex flex-col gap-2">
                 <div class="flex justify-between items-center">
                   <h3 class="text-[10px] font-bold text-black uppercase tracking-wider">Active Drug Stack</h3>
@@ -503,35 +543,85 @@ export default function App() {
               </div>
 
               <button onClick={generateGrowthSchedule} disabled={pharmState.loading} class="w-full bg-black hover:bg-neutral-800 disabled:opacity-50 text-white py-2 rounded-lg font-bold transition cursor-pointer text-[10px] uppercase tracking-wider mt-2">
-                {pharmState.loading ? 'Solving Schedule...' : 'Generate Flame Graph Growth Schedule'}
+                {pharmState.loading ? 'Solving Schedule...' : 'Generate Flame Grid Growth Schedule'}
               </button>
             </div>
 
             <div class="md:col-span-8 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3 min-h-0 overflow-y-auto">
-              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Scheduled Flame Graph & Live Cellular Perturbation Matrix</h2>
+              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Scheduled Flame Grid Calendar & Nutrient Matrix</h2>
               
-              <Show when={pharmState.flameGraph.length > 0} fallback={
+              <Show when={pharmState.flameGrid.length > 0} fallback={
                 <div class="bg-neutral-50 border border-neutral-200 p-6 rounded-lg text-center text-xs text-neutral-500">
-                  Click <strong>Generate Flame Graph Growth Schedule</strong> to render the longitudinal timeline buckets.
+                  Click <strong>Generate Flame Grid Growth Schedule</strong> to render the calendar matrix separated into months, days, and years.
                 </div>
               }>
-                <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg">
-                  <h3 class="text-[9px] font-bold uppercase tracking-wider text-black mb-2">Longitudinal Stack Load Flame Graph ({pharmState.days} Days)</h3>
-                  <div class="flex items-end gap-1.5 h-32 bg-white p-3 border border-neutral-200 rounded">
-                    <For each={pharmState.flameGraph}>
-                      {(bar) => (
-                        <div class="flex-1 flex flex-col items-center gap-1 h-full justify-end group relative">
-                          <div class="w-full bg-black rounded-t transition-all hover:bg-neutral-700" style={{ height: `${bar.load}%` }} title={`Day ${bar.day}: ${bar.load}% Load`}></div>
-                          <span class="text-[7px] font-mono text-neutral-500">{bar.day}d</span>
-                        </div>
-                      )}
-                    </For>
+                <div class="flex flex-col gap-3">
+                  <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg flex flex-col gap-2 max-h-56 overflow-y-auto">
+                    <div class="flex justify-between items-center">
+                      <h3 class="text-[9px] font-bold uppercase tracking-wider text-black">Calendar Grid ({pharmState.days} Days / Months & Years)</h3>
+                      <span class="text-[8px] text-neutral-500 font-mono">Click or hover any cell for nutrition & drug details</span>
+                    </div>
+                    <div class="grid grid-cols-12 sm:grid-cols-20 md:grid-cols-24 gap-1 p-1 bg-white border border-neutral-200 rounded">
+                      <For each={pharmState.flameGrid}>
+                        {(cell) => {
+                          const bgOpacity = Math.max(0.15, cell.load / 100);
+                          const isSelected = pharmState.selectedDayData?.dayIndex === cell.dayIndex;
+                          return (
+                            <div 
+                              onMouseEnter={() => setPharmState('selectedDayData', cell)}
+                              onClick={() => setPharmState('selectedDayData', cell)}
+                              class={`h-5 rounded cursor-pointer transition-all border ${isSelected ? 'border-black ring-1 ring-black scale-110 z-10' : 'border-neutral-200 hover:border-neutral-400'}`}
+                              style={{ 'background-color': `rgba(0, 0, 0, ${bgOpacity})` }}
+                              title={`Day ${cell.dayIndex} (${cell.dateStr}): Load ${cell.load}%`}
+                            ></div>
+                          );
+                        }}
+                      </For>
+                    </div>
                   </div>
+
+                  <Show when={pharmState.selectedDayData}>
+                    <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg flex flex-col gap-2 text-xs">
+                      <div class="flex justify-between items-center border-b border-neutral-200 pb-1.5">
+                        <span class="font-bold text-[10px] uppercase tracking-wider text-black">
+                          Inspection — {pharmState.selectedDayData.dateStr} (Day {pharmState.selectedDayData.dayIndex})
+                        </span>
+                        <span class="font-mono text-[9px] bg-black text-white px-2 py-0.5 rounded">Load Index: {pharmState.selectedDayData.load}%</span>
+                      </div>
+                      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono text-[9px]">
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="text-neutral-500 block uppercase">Calories</span>
+                          <span class="font-bold text-black text-xs">{pharmState.selectedDayData.calories} kcal</span>
+                        </div>
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="text-neutral-500 block uppercase">Protein</span>
+                          <span class="font-bold text-black text-xs">{pharmState.selectedDayData.protein}g</span>
+                        </div>
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="text-neutral-500 block uppercase">Carbohydrates</span>
+                          <span class="font-bold text-black text-xs">{pharmState.selectedDayData.carbs}g</span>
+                        </div>
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="text-neutral-500 block uppercase">Fats</span>
+                          <span class="font-bold text-black text-xs">{pharmState.selectedDayData.fat}g</span>
+                        </div>
+                      </div>
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px] pt-1">
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="font-bold block uppercase text-[9px] text-neutral-500 mb-0.5">Consumed Foods</span>
+                          <span class="text-black">{pharmState.selectedDayData.food}</span>
+                        </div>
+                        <div class="bg-white border border-neutral-200 p-2 rounded">
+                          <span class="font-bold block uppercase text-[9px] text-neutral-500 mb-0.5">Active Drugs / Stack</span>
+                          <span class="text-black font-mono">{pharmState.selectedDayData.drugs.join(', ')}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Show>
                 </div>
               </Show>
 
-              {/* Live Live-Updating Tabular Display */}
-              <div class="overflow-x-auto rounded border border-neutral-200 bg-white flex-1 min-h-[220px]">
+              <div class="overflow-x-auto rounded border border-neutral-200 bg-white flex-1 min-h-[160px]">
                 <table class="w-full text-left text-xs">
                   <thead class="bg-neutral-100 font-bold uppercase text-[9px]">
                     <tr>
