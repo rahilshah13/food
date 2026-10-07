@@ -54,6 +54,7 @@ export default function App() {
   let pl = null;
   const [tempUnit, setTempUnit] = createSignal('K');
   const [copyStatus, setCopyStatus] = createSignal('');
+  const [isFullScreenGrid, setIsFullScreenGrid] = createSignal(false);
   let canvasRef;
   let paintSimCanvasRef;
   let molDebounce;
@@ -134,7 +135,6 @@ export default function App() {
   const generateGrowthSchedule = async () => {
     setPharmState('loading', true);
     try {
-      // Attempt optional backend call, but don't fail if route is missing
       await fetch('/api/meal-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,6 +149,7 @@ export default function App() {
       const gridDays = [];
       const totalDays = pharmState.days;
       const startDate = new Date(2026, 0, 1);
+      const initialMass = 70; // baseline start mass kg
 
       for (let d = 0; d < totalDays; d++) {
         const currentDate = new Date(startDate);
@@ -167,6 +168,10 @@ export default function App() {
         const carbs = Math.round(220 + Math.sin(d / 10) * 50 + (Math.random() * 30 - 15));
         const fat = Math.round(70 + Math.cos(d / 25) * 20 + (Math.random() * 15 - 7));
         
+        // Intermediate Mass Target calculation (smooth linear ramp towards target mass)
+        const progressRatio = d / Math.max(1, totalDays - 1);
+        const massTarget = +(initialMass + (pharmState.mass - initialMass) * progressRatio).toFixed(1);
+
         const load = Math.min(100, Math.max(10, Math.round((calories / 3000) * 50 + activeDrugs.length * 10 + Math.random() * 15)));
 
         gridDays.push({
@@ -179,6 +184,7 @@ export default function App() {
           protein,
           carbs,
           fat,
+          massTarget,
           food: foodConsumed,
           drugs: activeDrugs.length > 0 ? activeDrugs : ['None (Baseline)'],
           load
@@ -196,6 +202,13 @@ export default function App() {
     } finally {
       setPharmState('loading', false);
     }
+  };
+
+  const getCellColorCode = (load) => {
+    if (load < 30) return 'bg-emerald-200 border-emerald-300'; // light optimal load
+    if (load < 55) return 'bg-sky-200 border-sky-300';         // moderate load
+    if (load < 80) return 'bg-amber-200 border-amber-300';     // elevated load
+    return 'bg-rose-300 border-rose-400 text-white';           // peak/high load stress
   };
 
   const runPrologAnalysis = async () => {
@@ -548,7 +561,14 @@ export default function App() {
             </div>
 
             <div class="md:col-span-8 bg-white p-4 rounded-xl border border-neutral-200 flex flex-col gap-3 min-h-0 overflow-y-auto">
-              <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Scheduled Flame Grid Calendar & Nutrient Matrix</h2>
+              <div class="flex justify-between items-center">
+                <h2 class="text-[10px] font-bold text-black uppercase tracking-wider">Scheduled Flame Grid Calendar & Nutrient Matrix</h2>
+                <Show when={pharmState.flameGrid.length > 0}>
+                  <button onClick={() => setIsFullScreenGrid(true)} class="text-[9px] bg-black text-white px-3 py-1 rounded font-bold hover:bg-neutral-800 cursor-pointer">
+                    Full Screen Mode ⛶
+                  </button>
+                </Show>
+              </div>
               
               <Show when={pharmState.flameGrid.length > 0} fallback={
                 <div class="bg-neutral-50 border border-neutral-200 p-6 rounded-lg text-center text-xs text-neutral-500">
@@ -559,20 +579,23 @@ export default function App() {
                   <div class="bg-neutral-50 border border-neutral-200 p-3 rounded-lg flex flex-col gap-2 max-h-56 overflow-y-auto">
                     <div class="flex justify-between items-center">
                       <h3 class="text-[9px] font-bold uppercase tracking-wider text-black">Calendar Grid ({pharmState.days} Days / Months & Years)</h3>
-                      <span class="text-[8px] text-neutral-500 font-mono">Click or hover any cell for nutrition & drug details</span>
+                      <div class="flex items-center gap-2 text-[8px] text-neutral-500">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-emerald-200 border border-emerald-300"></span>Optimal</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-sky-200 border border-sky-300"></span>Moderate</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-amber-200 border border-amber-300"></span>Elevated</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded bg-rose-300 border border-rose-400"></span>High Stress</span>
+                      </div>
                     </div>
                     <div class="grid grid-cols-12 sm:grid-cols-20 md:grid-cols-24 gap-1 p-1 bg-white border border-neutral-200 rounded">
                       <For each={pharmState.flameGrid}>
                         {(cell) => {
-                          const bgOpacity = Math.max(0.15, cell.load / 100);
                           const isSelected = pharmState.selectedDayData?.dayIndex === cell.dayIndex;
                           return (
                             <div 
                               onMouseEnter={() => setPharmState('selectedDayData', cell)}
                               onClick={() => setPharmState('selectedDayData', cell)}
-                              class={`h-5 rounded cursor-pointer transition-all border ${isSelected ? 'border-black ring-1 ring-black scale-110 z-10' : 'border-neutral-200 hover:border-neutral-400'}`}
-                              style={{ 'background-color': `rgba(0, 0, 0, ${bgOpacity})` }}
-                              title={`Day ${cell.dayIndex} (${cell.dateStr}): Load ${cell.load}%`}
+                              class={`h-5 rounded cursor-pointer transition-all border ${getCellColorCode(cell.load)} ${isSelected ? 'ring-2 ring-black scale-110 z-10' : 'hover:opacity-80'}`}
+                              title={`Day ${cell.dayIndex} (${cell.dateStr}): Load ${cell.load}% | Target Mass: ${cell.massTarget}kg`}
                             ></div>
                           );
                         }}
@@ -586,7 +609,10 @@ export default function App() {
                         <span class="font-bold text-[10px] uppercase tracking-wider text-black">
                           Inspection — {pharmState.selectedDayData.dateStr} (Day {pharmState.selectedDayData.dayIndex})
                         </span>
-                        <span class="font-mono text-[9px] bg-black text-white px-2 py-0.5 rounded">Load Index: {pharmState.selectedDayData.load}%</span>
+                        <div class="flex items-center gap-2">
+                          <span class="font-mono text-[9px] bg-neutral-200 text-neutral-800 px-2 py-0.5 rounded">Mass Target: {pharmState.selectedDayData.massTarget} kg</span>
+                          <span class="font-mono text-[9px] bg-black text-white px-2 py-0.5 rounded">Load Index: {pharmState.selectedDayData.load}%</span>
+                        </div>
                       </div>
                       <div class="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono text-[9px]">
                         <div class="bg-white border border-neutral-200 p-2 rounded">
@@ -897,6 +923,87 @@ export default function App() {
           </div>
         </Show>
       </div>
+
+      {/* Full-Screen Mode Modal for Flame Grid */}
+      <Show when={isFullScreenGrid()}>
+        <div class="fixed inset-0 z-50 bg-white p-6 flex flex-col gap-4 overflow-y-auto">
+          <div class="flex justify-between items-center border-b border-neutral-200 pb-3">
+            <div>
+              <h2 class="text-sm font-black uppercase tracking-wider text-black">Full-Screen Flame Grid Growth & Nutrition Matrix</h2>
+              <p class="text-[10px] text-neutral-500 font-mono">Total Duration: {pharmState.days} Days | Target Mass: {pharmState.mass} kg | Active Stack Size: {pharmState.stack.length}</p>
+            </div>
+            <button onClick={() => setIsFullScreenGrid(false)} class="bg-black text-white text-xs px-4 py-2 rounded-lg font-bold hover:bg-neutral-800 cursor-pointer">
+              Exit Full Screen ✕
+            </button>
+          </div>
+
+          <div class="flex flex-wrap gap-3 bg-neutral-50 p-3 rounded-lg border border-neutral-200 text-xs font-mono">
+            <div><strong>Total Days:</strong> {pharmState.flameGrid.length}</div>
+            <div><strong>Avg Calories:</strong> {Math.round(pharmState.flameGrid.reduce((a, c) => a + c.calories, 0) / Math.max(1, pharmState.flameGrid.length))} kcal</div>
+            <div><strong>Avg Mass Target:</strong> {(pharmState.flameGrid.reduce((a, c) => a + c.massTarget, 0) / Math.max(1, pharmState.flameGrid.length)).toFixed(1)} kg</div>
+          </div>
+
+          <div class="flex-1 bg-neutral-50 border border-neutral-200 p-4 rounded-xl flex flex-col gap-3 overflow-y-auto">
+            <div class="grid grid-cols-12 sm:grid-cols-24 md:grid-cols-32 lg:grid-cols-40 gap-1 p-2 bg-white border border-neutral-200 rounded">
+              <For each={pharmState.flameGrid}>
+                {(cell) => {
+                  const isSelected = pharmState.selectedDayData?.dayIndex === cell.dayIndex;
+                  return (
+                    <div 
+                      onMouseEnter={() => setPharmState('selectedDayData', cell)}
+                      onClick={() => setPharmState('selectedDayData', cell)}
+                      class={`h-6 rounded cursor-pointer transition-all border ${getCellColorCode(cell.load)} ${isSelected ? 'ring-2 ring-black scale-110 z-10' : 'hover:opacity-80'}`}
+                      title={`Day ${cell.dayIndex} (${cell.dateStr}): Load ${cell.load}% | Target Mass: ${cell.massTarget}kg`}
+                    ></div>
+                  );
+                }}
+              </For>
+            </div>
+
+            <Show when={pharmState.selectedDayData}>
+              <div class="bg-white border border-neutral-200 p-4 rounded-xl flex flex-col gap-2 text-xs">
+                <div class="flex justify-between items-center border-b border-neutral-200 pb-2">
+                  <span class="font-bold text-xs uppercase tracking-wider text-black">
+                    Inspection — {pharmState.selectedDayData.dateStr} (Day {pharmState.selectedDayData.dayIndex})
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono text-[10px] bg-neutral-200 text-neutral-800 px-2.5 py-1 rounded">Mass Target: {pharmState.selectedDayData.massTarget} kg</span>
+                    <span class="font-mono text-[10px] bg-black text-white px-2.5 py-1 rounded">Load Index: {pharmState.selectedDayData.load}%</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono text-[10px]">
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="text-neutral-500 block uppercase">Calories</span>
+                    <span class="font-bold text-black text-sm">{pharmState.selectedDayData.calories} kcal</span>
+                  </div>
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="text-neutral-500 block uppercase">Protein</span>
+                    <span class="font-bold text-black text-sm">{pharmState.selectedDayData.protein}g</span>
+                  </div>
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="text-neutral-500 block uppercase">Carbohydrates</span>
+                    <span class="font-bold text-black text-sm">{pharmState.selectedDayData.carbs}g</span>
+                  </div>
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="text-neutral-500 block uppercase">Fats</span>
+                    <span class="font-bold text-black text-sm">{pharmState.selectedDayData.fat}g</span>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs pt-1">
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="font-bold block uppercase text-[10px] text-neutral-500 mb-1">Consumed Foods</span>
+                    <span class="text-black">{pharmState.selectedDayData.food}</span>
+                  </div>
+                  <div class="bg-neutral-50 border border-neutral-200 p-2.5 rounded">
+                    <span class="font-bold block uppercase text-[10px] text-neutral-500 mb-1">Active Drugs / Stack</span>
+                    <span class="text-black font-mono">{pharmState.selectedDayData.drugs.join(', ')}</span>
+                  </div>
+                </div>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }
