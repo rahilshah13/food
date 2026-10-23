@@ -28,11 +28,11 @@ services:
 
         WORKDIR /app
 
+        # Added --legacy-peer-deps to prevent the npm arborist edgesOut null crash
         RUN mkdir -p frontend/src && cd frontend && \
             npm init -y && \
             npm pkg set type="module" && \
-            npm install solid-js vite vite-plugin-solid trealla && \
-            npm install -D tailwindcss@3 postcss autoprefixer
+            npm install solid-js vite vite-plugin-solid trealla tailwindcss@3 postcss autoprefixer --legacy-peer-deps
 
         WORKDIR /app/frontend
 
