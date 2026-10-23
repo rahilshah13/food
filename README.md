@@ -77,13 +77,6 @@ tpl -g "iterate_smiles_from_mass([(c, 36.0), (h, 6.0), (o, 47.0)], Smiles), writ
 ### `pharmacy.pl`
 
 ```
-tpl pharmacy.pl -g list_recipes
-
-tpl pharmacy.pl -g dex:run_bench
-tpl pharmacy.pl -g pred:run_bench
-tpl pharmacy.pl -g soy:run_bench
-tpl pharmacy.pl -g yam:run_bench
-tpl pharmacy.pl -g tof:run_bench
-tpl pharmacy.pl -g vanc:run_bench
-tpl pharmacy.pl -g ved:run_bench
+tpl pharmacy.pl -g "list_recipes, halt."
+tpl pharmacy.pl -g "dex_run_bench, pred_run_bench, soy_run_bench, yam_run_bench, tof_run_bench, vanc_run_bench, ved_run_bench, halt."
 ```
